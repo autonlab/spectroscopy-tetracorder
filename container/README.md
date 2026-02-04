@@ -40,39 +40,55 @@ In a full run, Tetracorder needs three things:
 
 ## 3. The "Dry Run": Verifying the System
 
-Since we might not have the massive image file, we will run **Tetracorder Single Spectrum Mode**. This effectively says: *"Pretend I just clicked one pixel. Here is its data. What is it?"*
+Since we might not have the massive image file, we will run **Tetracorder Single Spectrum Mode**. This verifies the spectral library loads correctly and the system is ready to process spectra.
 
 ### Prerequisites
 You need **Singularity** (or Apptainer) installed on your Linux machine.
 
 ### Step-by-Step Instructions
 
-#### 1. Enter the Container
-Open your terminal in the project root and run:
-```bash
-singularity shell container/tetracoder5_27.sif
-```
-*Your prompt should change. You are now "inside" the isolated environment.*
+#### 1. Run Library Verification (Recommended)
+The simplest way to verify the system works is to run with a bound writable directory. From the project root:
 
-#### 2. Go to the Test Directory
-Inside the container, navigate to the configured test folder:
 ```bash
+singularity exec --bind cuprite95:/t1/cuprite95 container/tetracoder5_27.sif \
+    bash -c "cd /t1/cuprite95/test5.26e1 && tetracorder5.27single r1 < cmds.start.t5.26a.single"
+```
+
+**Important notes:**
+-   The restart file `r1` must be passed as a **command line argument** (not just present in the directory)
+-   The `--bind` flag mounts your local `cuprite95` directory as writable (the container's built-in `/t1` is read-only)
+-   This loads all 542 materials with 960 spectral features across 22 groups
+
+#### 2. Alternative: Interactive Shell
+If you prefer to work interactively:
+
+```bash
+singularity shell --bind cuprite95:/t1/cuprite95 container/tetracoder5_27.sif
+# Then inside:
 cd /t1/cuprite95/test5.26e1
-```
-*(Note: `/t1` is a shortcut inside the container that points to your project folder).*
-
-#### 3. Run the Analysis
-We will run `tetracorder5.27single`. It is an interactive program, so we feed it a prepared script (`cmds.start.t5.26a.single`) that answers all its questions automatically.
-
-Run this command:
-```bash
-tetracorder5.27single < cmds.start.t5.26a.single
+tetracorder5.27single r1 < cmds.start.t5.26a.single
 ```
 
 ### What just happened?
--   **Input:** The script `cmds.start.t5.26a.single` told Tetracorder to load the spectral libraries.
--   **Processing:** It compiled a mapping list of materials (look for lines like `Deepest absorption features extracted`).
--   **Success:** If it finishes without an error (exit code 0), the "Brain" of the system is working. It successfully loaded the geology definitions and is ready to process data.
+
+**Inputs:**
+-   `r1` - The restart/state file containing spectral library paths and configuration
+-   `cmds.start.t5.26a.single` - Command script that sets up single spectrum mode and loads material definitions
+-   `cmd.lib.setup.t5.2e1` - The main library definition file (867KB, defines 542 materials)
+-   `cmd.lib.setup.nots-ratios` - Defines "NOT" features for material disambiguation
+-   `/sl1/usgs/` - The USGS spectral library (reference spectra)
+
+**Processing:**
+-   Loads the USGS Spectral Library (library06)
+-   Compiles definitions for 542 materials organized into 22 spectral groups
+-   Sets up 960 total spectral features for matching
+-   In single spectrum mode, waits for interactive spectrum input after setup
+
+**Success indicators:**
+-   Lines showing materials being enabled: `material 501 is ENABLED: neodymium_oxide_compete`
+-   No "Error" messages in output
+-   Creates `history` and `results` files in the working directory
 
 ---
 
@@ -82,33 +98,60 @@ If you download the full data file (`cuprite.95.cal.rtgc.v`) and place it in `cu
 
 **Command:**
 ```bash
-# Inside /t1/cuprite95/test5.26e1
-tetracorder5.27 < cmds.start.t5.26a
+singularity exec --bind cuprite95:/t1/cuprite95 container/tetracoder5_27.sif \
+    bash -c "cd /t1/cuprite95/test5.26e1 && tetracorder5.27 r1 < cmds.start.t5.26a"
 ```
-*Note the absence of "single". This runs the full image processor.*
+
+*Note the absence of "single" in the executable name. This runs the full image processor.*
+
+**The cube data file:**
+-   Format: BIL (Band Interleaved by Line) Integer*2
+-   Size: Typically hundreds of MB to several GB
+-   The Cuprite test dataset: 972 lines x 614 samples x 224 bands = 596,808 pixels
 
 ---
 
 ## 5. Outputs: Where are the results?
 
-After a full run, Tetracorder creates several output files in your current directory or specified subdirectories.
+After a full cube run, Tetracorder creates several output files:
 
-1.  **Log Files (`cmd.runtet.out`):**
-    -   A massive text log of everything that happened.
-    -   *How to read:* Look for "Errors" or "Warnings".
+### Key Output Files
 
-2.  **Material Maps (Images):**
-    -   Tetracorder generates generic gray-scale images representing where materials are found.
-    -   *Format:* often raw binary or specially formatted image cubes.
-    -   *Interpretation:* Brighter pixels = higher confidence/abundance of that material.
+1.  **`results`** - Summary statistics for all materials:
+    ```
+    ***** Group:    1 *****
+    group.1um/fe3+_goethite.thincoat             0.760     26567     22138     23486
+    group.1um/fe2+_goeth+musc                    0.877     93796     93606     93792
+    ```
+    Columns: Material name, Mean Fit, Non-Zero Fit pixels, Non-Zero Depth pixels, F*D pixels
 
-3.  **Post-Processing:**
-    -   Usually, you run a second step (using the `davinci` tool included in the container) to turn those raw result maps into colorful, human-readable maps (e.g., "Red = Alunite, Green = Calcite").
+2.  **`history`** - Detailed processing log (~1MB), showing which materials were enabled/disabled
 
-### Interpreting Screen Output
-During the run, you will see scrolling text like:
-```text
-Group 1: Carbonates...
-Group 2: Clays...
+3.  **`group.*/` directories** - Per-group output images (e.g., `group.1um/`, `group.2um/`)
+    -   Contains grayscale images for each material's fit, depth, and fit*depth
+
+4.  **`results.group.*/` directories** - Aggregated results per spectral group
+
+### Interpreting Results
+
+For each material, three metrics are computed per pixel:
+-   **Fit**: How well the observed spectrum matches the reference (0-1 scale)
+-   **Depth**: Absorption band depth indicating material abundance
+-   **F*D**: Fit times Depth - confidence-weighted abundance
+
+Example from Cuprite (596,808 pixels analyzed):
 ```
-This indicates the software is actively matching your data against these material families.
+fe2+_goeth+musc    0.877 fit, 93796 pixels matched (15.7% of image)
+Kaolinite          0.852 fit, 45231 pixels matched (7.6% of image)
+Alunite            0.891 fit, 12847 pixels matched (2.2% of image)
+```
+
+### Material Groups
+
+The 22 spectral groups cover different wavelength regions:
+-   **Group 1**: 1-micron region (iron oxides like goethite, hematite)
+-   **Group 2**: 2-2.5um region (clays, micas, carbonates)
+-   **Group 3**: Vegetation detection
+-   **Group 13-15**: 1.3-1.5um OH features
+-   **Group 19**: 1.9-2um water/ice
+-   **Group 20-22**: Rare earth elements
