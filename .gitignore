@@ -1,5 +1,6 @@
 *.sif
 .venv/
+__pycache__/
 
 # Tetracorder generated outputs
 cuprite95/*/results
