@@ -1,55 +1,120 @@
 # Tetracorder Singularity Container Guide
 
-This guide explains how to use the **USGS Tetracorder** system packaged in this Singularity container.
+This guide explains how to use the **USGS Tetracorder** system packaged in a Singularity container.
 
-**Goal:** Feed a single spectral signature (a single pixel from a hyperspectral image) to Tetracorder and have it identify the material by comparing against a library of 542 known geological references.
+**Goal:** Feed a single spectral signature (one pixel from a hyperspectral image) to Tetracorder and have it identify the material by comparing against a library of 542 known geological references.
 
 ---
 
-## 1. Concepts: What are we doing?
+## 1. Concepts
 
 ### The Science (Simplified)
+
 Imagine taking a picture of the ground, but instead of just Red, Green, and Blue (3 colors), your camera captures hundreds of "colors" (wavelengths) across the infrared spectrum.
--   **Hyperspectral Cube:** This is the input image. It's called a "cube" because it has 2 spatial dimensions (X, Y) and 1 spectral dimension (Z).
--   **Spectral Signature:** If you drill down into one pixel of that image, you get a line graph showing how much light gets reflected at different wavelengths. This curve is a unique "fingerprint" for materials like minerals, vegetation, or chemicals.
--   **Tetracorder:** This software takes that fingerprint and checks it against thousands of known fingerprints (the **Spectral Library**) to say: *"This pixel is Alunite (a sulfate mineral) with Fit=0.98."*
 
-### The Container
-Scientific software often requires very specific, old system configurations. We have packaged everything (Ubuntu 22.04, Fortran compilers, Libraries) into a single file: `tetracoder5_27.sif`.
+- **Hyperspectral Cube:** The input image. It's called a "cube" because it has 2 spatial dimensions (X, Y) and 1 spectral dimension (wavelength).
+- **Spectral Signature:** If you drill down into one pixel, you get a line graph showing reflectance at different wavelengths. This curve is a unique "fingerprint" for materials like minerals, vegetation, or chemicals.
+- **Tetracorder:** Software that takes that fingerprint, checks it against thousands of known fingerprints (the **Spectral Library**), and says: *"This pixel is Alunite (a sulfate mineral) with Fit=0.98."*
 
----
+### Singularity / Containers
 
-## 2. Inputs
+Scientific software often requires very specific, old system configurations. We package everything (Ubuntu 22.04, Fortran compilers, spectral libraries, Tetracorder binaries) into a single file: `tetracoder5_27.sif`.
 
-Tetracorder needs three things:
+- **Singularity** (also called Apptainer) is a container runtime designed for HPC clusters. It works like Docker but runs without root privileges, which is why it's used on shared clusters like Bridges-2.
+- **`.sif` file:** A Singularity Image File -- a single read-only file containing an entire Linux filesystem with all our software pre-installed.
+- **`singularity exec <image> <command>`:** Runs a command inside the container. The command sees the container's filesystem (with all the Tetracorder binaries and libraries) but can also access files from the host.
+- **`--bind host_path:container_path`:** Mounts a directory from the host into the container at a specific path. This is how we make our local config files visible inside the container.
 
-1.  **A Spectrum to Analyze**
-    -   In single spectrum mode, this is a reference to a record in a SPECPR binary file (e.g., record 300 in file `y` = Alunite).
-    -   The spectral library files inside the container already contain thousands of known spectra.
+### The `/t1` Convention
 
-2.  **The Spectral Library (The Reference)**
-    -   *Location inside container:* `/sl1/usgs/` (built-in, read-only).
-    -   *Content:* USGS Spectral Library 06 -- thousands of laboratory-measured spectra.
-    -   File `y` = `/sl1/usgs/library06.conv/s06av95a` (convolved for AVIRIS).
-    -   File `w` = `/sl1/usgs/rlib06/r06av95a` (reference library).
+Inside the container, the Dockerfile creates `/t1` as a symlink to `/home/t1`. This is an arbitrary convention inherited from the original USGS setup. The container has built-in data at several paths:
 
-3.  **Command Scripts (The Instructions)**
-    -   *Location:* `cuprite95/test5.26e1/` (or `cuprite95/example-01/` via symlinks).
-    -   `r1` -- restart file defining library paths, 224 wavelength channels.
-    -   `cmds.start.t5.26a.single` -- command script for single spectrum mode.
-    -   `cmd.lib.setup.t5.2e1` -- 867KB file defining 542 materials with 960 spectral features.
-    -   `cmd.lib.setup.nots-ratios` -- "NOT" features for material disambiguation.
+- `/t1/cuprite95/` -- a read-only copy of the cuprite95 test data
+- `/t1/tetracorder.cmds/` -- command templates
+- `/sl1/usgs/` -- the spectral reference libraries
+
+When we run `--bind cuprite95:/t1/cuprite95`, we overlay our local `cuprite95/` directory over the container's built-in `/t1/cuprite95/`. This lets Tetracorder find our config files (which may differ from the built-in ones) while the rest of the container filesystem remains unchanged.
 
 ---
 
-## 3. Running Single Spectrum Mode
+## 2. Getting the Container
+
+The `.sif` file is **not tracked in git** (it's 1.1 GB). You need to obtain it separately.
+
+### Option A: Copy from shared storage
+
+```bash
+cp /ocean/projects/cis250251p/shared/tetracoder5_27.sif container/
+```
+
+### Option B: Symlink (saves disk space)
+
+```bash
+ln -s /ocean/projects/cis250251p/shared/tetracoder5_27.sif container/tetracoder5_27.sif
+```
+
+### Verify
+
+Confirm the binary is accessible inside the container:
+
+```bash
+singularity exec container/tetracoder5_27.sif tetracorder5.27single
+```
+
+This should print a usage message or error (proving the binary exists and runs).
+
+---
+
+## 3. Inputs -- What You Need
+
+### Files you provide
+
+These must be in your working directory (e.g. `cuprite95/example-01/`). They form an include chain and must all be present together:
+
+| File | Purpose |
+|------|---------|
+| `r1` | Restart file. Defines which spectral library files to use and the 224 wavelength channels. |
+| `cmds.start.t5.26a.single` | Command script for single-spectrum mode. Sets up aliases, group directories, and includes the library setup. Line 134 contains `<cmd.lib.setup.t5.2e1`. |
+| `cmd.lib.setup.t5.2e1` | Library setup (867 KB). Defines 542 materials with 960 spectral features. Line 222 contains `<cmd.lib.setup.nots-ratios`. |
+| `cmd.lib.setup.nots-ratios` | "NOT" features used for material disambiguation. |
+
+The `<filename` syntax is a **Tetracorder include directive** (not shell redirection). Tetracorder opens the referenced file directly from disk, so all 4 files must be co-located.
+
+### Files inside the container (read-only)
+
+You don't need to provide these -- they're baked into the `.sif` image:
+
+| Path | Description | File letter |
+|------|-------------|-------------|
+| `/sl1/usgs/library06.conv/s06av95a` | Convolved spectral library (AVIRIS) | `y` |
+| `/sl1/usgs/rlib06/r06av95a` | Reference spectral library | `w` |
+
+### Auto-generated files (gitignored)
+
+These are created during analysis in the working directory:
+
+| File / Directory | Description |
+|------------------|-------------|
+| `results` | Main output file (~200 KB) with match results |
+| `history` | Detailed processing log (~1.1 MB) |
+| `spoolfile`, `fort.55` | Internal Tetracorder temp files |
+| `.cmd`, `.spttl` | Internal state files |
+| `group.1um/`, `group.2um/`, ... (24 directories) | Per-group analysis output directories |
+
+All of these are listed in `.gitignore` and can be safely deleted.
+
+---
+
+## 4. Running Single Spectrum Mode
 
 ### Prerequisites
-You need **Singularity** (or Apptainer) installed on your Linux machine.
 
-### Quick Start with `example-01/`
+- **Singularity** (or Apptainer) installed on your Linux machine
+- The `.sif` container file (see [Getting the Container](#2-getting-the-container))
 
-The `cuprite95/example-01/` directory contains a minimal setup with symlinks to config files and all required output directories. From the project root:
+### Quick Start with `run.sh`
+
+From the project root:
 
 ```bash
 # Analyze Alunite (record 300 in convolved library)
@@ -61,7 +126,7 @@ The `cuprite95/example-01/` directory contains a minimal setup with symlinks to 
 
 ### Manual Command
 
-If you prefer to run manually, from the project root:
+If you prefer to run Tetracorder directly:
 
 ```bash
 singularity exec --bind cuprite95:/t1/cuprite95 container/tetracoder5_27.sif \
@@ -85,11 +150,12 @@ Tetracorder reads commands from stdin. The command file (`cmds.start.t5.26a.sing
 | 6 | *(blank line)* | Acknowledge "Analysis Complete" |
 | 7 | `e` | Exit program |
 
-**Important notes:**
--   The `--bind` flag mounts your local `cuprite95` directory as writable (the container's built-in `/t1` is read-only).
--   The restart file `r1` must be passed as a **command line argument**.
--   `<cmd.lib.setup.t5.2e1` inside the command file is a **Tetracorder include directive** (not shell redirection) -- Tetracorder opens that file directly from disk.
--   The process may time out or show "pipe crashed" errors after analysis is complete; results are already written to disk at that point.
+### Important Notes
+
+- The `--bind` flag mounts your local `cuprite95` directory over the container's built-in `/t1/cuprite95` (which is read-only).
+- The restart file `r1` must be passed as a **command-line argument**, not via stdin.
+- `<cmd.lib.setup.t5.2e1` inside the command file is a **Tetracorder include directive** (not shell redirection) -- Tetracorder opens that file directly from disk.
+- The process may time out or show "pipe crashed" errors after analysis is complete. This is expected -- results are already written to disk at that point.
 
 ### Available Test Spectra
 
@@ -101,9 +167,9 @@ Tetracorder reads commands from stdin. The command file (`cmds.start.t5.26a.sing
 
 ---
 
-## 4. Outputs
+## 5. Outputs -- Understanding Results
 
-After a single spectrum analysis, Tetracorder writes two files to the working directory:
+After a single spectrum analysis, Tetracorder writes two files to the working directory.
 
 ### `results` (~200 KB)
 
@@ -126,17 +192,22 @@ Following the summary, the file contains detailed per-material scores for all 54
 ### Interpreting Results
 
 For each spectral group, the best-matching material is shown with three metrics:
--   **Fit** (0--1): How well the observed spectrum shape matches the reference.
--   **Depth**: Absorption band depth, a proxy for material abundance.
--   **F\*D**: Fit times Depth -- confidence-weighted abundance.
+
+- **Fit** (0--1): How well the observed absorption band shape matches the reference. 1.0 = perfect shape match.
+- **Depth** (0--1): Absorption band depth. Deeper = more of that material present. A proxy for material abundance/concentration.
+- **F\*D** (Fit x Depth): The confidence-weighted abundance score. This is typically the most useful single metric -- it combines shape match quality with signal strength. Higher = more confident identification.
+- **"none"** means no material in that spectral group matched above threshold.
+
+### Spectral Groups
 
 The 22 spectral groups cover different wavelength regions:
--   **Group 1**: 1-micron region (iron oxides like goethite, hematite)
--   **Group 2**: 2-2.5um region (clays, micas, carbonates, sulfates)
--   **Group 3**: Vegetation detection
--   **Group 13-15**: 1.3-1.5um OH features
--   **Group 19**: 1.9-2um water/ice
--   **Group 20-22**: Rare earth elements
+
+- **Group 1**: 1-micron region (iron oxides like goethite, hematite)
+- **Group 2**: 2-2.5um region (clays, micas, carbonates, sulfates)
+- **Group 3**: Vegetation detection
+- **Groups 13-15**: 1.3-1.5um OH features
+- **Group 19**: 1.9-2um water/ice
+- **Groups 20-22**: Rare earth elements
 
 ### `history` (~1.1 MB)
 
@@ -144,43 +215,71 @@ Detailed processing log showing which materials were enabled/disabled and the fu
 
 ---
 
-## 5. Python Wrapper
+## 6. Python Wrapper
 
-A Python wrapper is available at `cuprite95/example-01/run_tetracorder.py`.
+The `tetracorderpy` package provides a Python interface to Tetracorder.
 
-### Usage
+### Installation
+
+From the project root:
 
 ```bash
-# Requires Python 3.7+ (uses dataclasses)
-uv run python cuprite95/example-01/run_tetracorder.py y 300
+uv sync
 ```
 
-Output:
-```
-Spectrum: Alunite GDS97 K Syn (150C) s06av95a=a
-  Source: file 's06av95a' record 300
+This installs the package (and its `tetracorderpy` CLI entry point) into the project's virtual environment.
 
-Matches:
-  grp  2 2-2.5um          sulfate_kalun150c                   Fit=1.0000  Depth=0.1804  F*D=0.1804
-  grp 14 1.4-1.5 nrw      ohb_1.449_sulfate-schwertm          Fit=0.9787  Depth=0.1234  F*D=0.1208
-  grp 15 1.5um OH         ohc_1.455_zeolite-natrolite         Fit=0.9302  Depth=0.1113  F*D=0.1035
-  grp 13 1.3-1.4 nrw      oh_1.432_phyllo-vermiculite         Fit=0.8137  Depth=0.0936  F*D=0.0761
+### CLI Usage
 
-No match in: grp 1, grp 3, grp 4, grp 5, grp 19, grp 20, grp 21, grp 22
+```bash
+uv run tetracorderpy --work-dir cuprite95/example-01 y 300
 ```
 
-### Programmatic Use
+or equivalently:
+
+```bash
+uv run python -m tetracorderpy --work-dir cuprite95/example-01 y 300
+```
+
+CLI options:
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--work-dir` | *(required)* | Directory containing the 4 config files |
+| `--container` | auto-discover | Path to `.sif` file (default: finds `container/*.sif`) |
+| `--timeout` | 15 | Timeout in seconds (a timeout is expected and normal) |
+
+### Programmatic Usage
 
 ```python
-from run_tetracorder import run_tetracorder
+import tetracorderpy as tt
 
-result = run_tetracorder("y", 300)
+result = tt.run("y", 300, work_dir="cuprite95/example-01")
 
 for match in result.matches:
     print(f"{match.material_name}: Fit={match.fit}")
 ```
 
-The `SpectrumResult` object contains:
--   `matches`: list of `GroupMatch` objects (group_num, material_name, fit, depth, fd)
--   `no_match_groups`: list of groups with no identification
--   `title`: spectrum title from the library
+### Return Types
+
+**`SpectrumResult`** -- returned by `tt.run()`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `file_letter` | `str` | SPECPR file letter (e.g. `"y"`) |
+| `record` | `int` | Record number in the SPECPR file |
+| `title` | `str` | Spectrum title from the library |
+| `matches` | `list[GroupMatch]` | Materials matched per spectral group |
+| `no_match_groups` | `list[tuple[int, str]]` | Groups with no match (group_num, group_name) |
+
+**`GroupMatch`** -- one entry per spectral group that found a match:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `group_num` | `int` | Spectral group number |
+| `group_name` | `str` | Group name (e.g. `"2-2.5um"`) |
+| `material_id` | `int` | Material ID within the group |
+| `material_name` | `str` | Material name (e.g. `"sulfate_kalun150c"`) |
+| `fit` | `float` | Fit score (0--1) |
+| `depth` | `float` | Absorption band depth (0--1) |
+| `fd` | `float` | Fit x Depth |
