@@ -1,0 +1,14 @@
+*.sif
+.venv/
+__pycache__/
+
+# Tetracorder generated outputs
+cuprite95/*/results
+cuprite95/*/history
+cuprite95/*/fort.*
+cuprite95/*/spoolfile
+cuprite95/*/.cmd
+cuprite95/*/.spttl
+cuprite95/*/group.*/
+cuprite95/*/case.*/
+cuprite95/*/carbonate-2feat/
