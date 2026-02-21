@@ -283,3 +283,115 @@ for match in result.matches:
 | `fit` | `float` | Fit score (0--1) |
 | `depth` | `float` | Absorption band depth (0--1) |
 | `fd` | `float` | Fit x Depth |
+
+---
+
+## 7. Using Other File Letters/Records (`y 300` is Just an Example)
+
+`y 300` is only one test case. In Tetracorder single-spectrum mode, the input is always:
+
+```text
+<FILE_LETTER> <RECORD_NUMBER>
+```
+
+For example:
+
+- `y 7128` (still from the convolved library)
+- `w 654` (from the reference library)
+
+### What the file letter means
+
+The letter (`y`, `w`, etc.) is resolved by the restart file `r1`:
+
+- `iyfl=...` and `inmy=...` define the file behind letter `y`
+- `iwfl=...` and `iwdgt=...` define the file behind letter `w`
+
+So you can use letters other than `y` as long as:
+
+1. That device letter is configured in `r1`
+2. The referenced library file exists inside the container
+3. The record number exists in that library
+
+### Python usage with different inputs
+
+No code changes are required. Just pass different arguments:
+
+```python
+import tetracorderpy as tt
+
+r1 = tt.run("y", 7128, work_dir="my-run")
+r2 = tt.run("w", 654, work_dir="my-run")
+```
+
+---
+
+## 8. New Data (Not `cuprite95`): What to Do
+
+You do **not** need to use the `cuprite95/` directory name. The current Python wrapper works with any directory that contains the required config files.
+
+### 8.1 If you only want single-spectrum analysis
+
+This is the simplest path.
+
+1. Create a new working directory (for example `my-data/run-01/`).
+2. Copy these four files into it:
+   - `r1`
+   - `cmds.start.t5.26a.single`
+   - `cmd.lib.setup.t5.2e1`
+   - `cmd.lib.setup.nots-ratios`
+3. Edit `r1` if needed to point to the correct libraries and channel count.
+4. Run from Python:
+
+```python
+import tetracorderpy as tt
+result = tt.run("y", 300, work_dir="my-data/run-01")
+```
+
+This mode does not require a hyperspectral cube file. It analyzes one library spectrum per call.
+
+### 8.2 If you need full cube mapping for a new instrument/cube
+
+This requires more setup and currently is **not** fully wrapped by `tetracorderpy`.
+
+High-level steps:
+
+1. Convolve spectral libraries for your instrument (create the `r06...` and `s06...` library files).
+2. Create/update a restart file (`r1-...`) with correct:
+   - library file paths
+   - file-letter mapping (`w`, `y`, etc.)
+   - `nchans`
+3. Add a dataset entry under:
+   - `tetracorder.cmds/tetracorder5.27a.cmds/DATASETS/`
+4. Add deleted-channel definition under:
+   - `tetracorder.cmds/tetracorder5.27a.cmds/DELETED.channels/`
+5. Generate a new run directory with:
+   - `cmd-setup-tetrun`
+6. Run tetracorder (`cmd.runtet cube ...`) and post-processing scripts.
+
+This is the official USGS workflow for new sensors.
+
+---
+
+## 9. Python-First Workflow (Current State)
+
+Current status:
+
+- `tetracorderpy` already supports Python-driven single-spectrum runs (`tt.run(...)`).
+- It accepts arbitrary file letters and record numbers.
+- `work_dir` can be any path, not just `cuprite95/example-01`.
+
+What is not yet wrapped:
+
+- End-to-end automation for creating a new dataset/instrument definition
+- Full cube-mode setup (`cmd-setup-tetrun`) and map post-processing
+
+Practical recommendation today:
+
+1. Use shell/command-file steps once to create a valid run directory for your new dataset.
+2. Use Python for repeated single-spectrum analyses and result parsing.
+3. Add Python automation for dataset bootstrap in a later phase.
+
+If you want, a next step is to add a new Python helper like:
+
+- `tetracorderpy.bootstrap_run_dir(...)` for `cmd-setup-tetrun`
+- `tetracorderpy.run_cube(...)` for `cmd.runtet cube`
