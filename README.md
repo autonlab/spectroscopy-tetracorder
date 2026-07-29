@@ -46,6 +46,186 @@ The tetracorder system also requires
 
 Tetracorder, Specpr, and support programs run on linux and unix.
 
+# Python interface (Tetracorder 6.00)
+
+The `tetracorderpy` package accepts reflectance spectra as NumPy-like tensors,
+runs the Tetracorder 6.00 native cube workflow once per call, and decodes the
+native map files back into aligned NumPy arrays. Callers do not need to know
+the Tetracorder command language, SPECPR records, or its working-file layout.
+
+## Setup
+
+The wrapper requires Python 3.12+,
+[uv](https://docs.astral.sh/uv/), Apptainer or Singularity, and a
+Tetracorder 6.00 image. From the repository root:
+
+```bash
+uv sync --group dev
+./container/build-tetracorder6.sh
+```
+
+The image build is a clean source build; it does not layer changes onto an
+older SIF. The script creates `container/tetracorder6_00a5.sif` and refuses
+to overwrite an existing image. See `container/README.md` for build details.
+
+At runtime, the wrapper searches for `container/tetracorder6*.sif` and for
+`apptainer` or `singularity` on `PATH`. A caller may instead pass
+`container=` and `runtime=`, or set `TETRACORDER_CONTAINER`.
+
+## NumPy quick start
+
+This example constructs a smooth, minimally plausible reflectance curve. It
+does not copy a spectrum from a reference library:
+
+```python
+import numpy as np
+
+from tetracorderpy import analyze, get_profile
+
+profile = get_profile("aviris_1995")
+wavelength = profile.wavelength
+assert wavelength is not None
+
+continuum = 0.47 + 0.07 * (wavelength - wavelength.min()) / np.ptp(wavelength)
+spectrum = continuum.copy()
+for center, depth, width in (
+    (0.92, 0.11, 0.065),
+    (2.20, 0.13, 0.035),
+    (2.33, 0.055, 0.030),
+):
+    spectrum -= depth * np.exp(-0.5 * ((wavelength - center) / width) ** 2)
+spectrum = np.clip(spectrum, 0.02, 0.98).astype(np.float32)
+
+result = analyze(
+    spectrum,
+    wavelength=wavelength,
+    fwhm=profile.fwhm,
+    profile=profile,
+)
+
+for index, decision in enumerate(result.decisions):
+    if result.matched[index]:
+        material_id = int(result.material_id[index])
+        print(
+            decision.name,
+            result.material_name(material_id),
+            float(result.fit[index]),
+            float(result.depth[index]),
+            float(result.fit_depth[index]),
+        )
+```
+
+A made-up spectrum is useful as an execution and schema test. Its geological
+identifications are not validation data; scientific results still require
+appropriate calibration and domain review.
+
+## One API for a spectrum, batch, or cube
+
+`analyze()` accepts any number of leading sample dimensions and one shared
+spectral axis. The spectral axis is last by default; use `spectral_axis=` when
+it is elsewhere.
+
+| Input shape | Meaning | Result-array shape |
+|---|---|---|
+| `(bands,)` | one spectrum | `(decisions,)` |
+| `(n, bands)` | a batch | `(n, decisions)` |
+| `(y, x, bands)` | a hyperspectral cube | `(y, x, decisions)` |
+| `(..., bands)` | arbitrary tensor | `(..., decisions)` |
+
+All spectra in one call share wavelength, FWHM, and sensor profile metadata.
+They are packed into one native cube, so a batch or cube launches one
+container process—not one process per spectrum. Because the backend is
+one-shot and has no persistent server, combine many spectra into one call
+instead of calling `analyze()` in a Python loop.
+
+The final decision axis is stable for the selected expert system. It includes
+every configured group and case even when Tetracorder omits an empty native
+map.
+
+## Input model and sensor profiles
+
+`SpectralData` is the format-independent model. It stores reflectance values,
+wavelength, optional FWHM, an optional broadcastable mask, dimension names,
+coordinates, and metadata. Wavelength and FWHM are canonicalized to
+micrometers; pass `wavelength_unit="nm"` for nanometers. NaN, infinity, and
+masked cells become native deleted values.
+
+`SpectralProfile` is separate from the array and from its disk format. It
+identifies the sensor response and the matching Tetracorder dataset preset.
+`get_profile("aviris_1995")` includes the exact 224-band upstream wavelength
+and FWHM arrays. `available_profiles()` lists the other bundled presets.
+
+A wavelength array alone is not enough to make an arbitrary instrument
+compatible: Tetracorder also needs reference libraries convolved to that
+sensor response and a matching dataset preset. Advanced users can construct
+a `SpectralProfile` with a custom `backend_profile` after adding those native
+resources. The public `version=` and backend seam leave room for later
+Tetracorder versions; only version 6.00 is implemented today.
+
+## ENVI and other file formats
+
+File parsing is deliberately outside the analysis model. The included ENVI
+adapter handles BIP, BIL, and BSQ inputs and common wavelength, FWHM, bad-band,
+ignore-value, and reflectance-scale header fields:
+
+```python
+from tetracorderpy import analyze
+from tetracorderpy.formats import read_envi
+
+data = read_envi("scene/image")
+result = analyze(data, profile="aviris_1995")
+```
+
+Additional formats can be implemented as adapters that produce
+`SpectralData`; the Tetracorder backend does not need to change.
+
+The equivalent ENVI command-line entry point is:
+
+```bash
+uv run tetracorderpy scene/image --profile aviris_1995
+```
+
+## Results and native artifacts
+
+Each compact result array has shape `input_sample_shape + (decisions,)`:
+
+| Attribute | Meaning |
+|---|---|
+| `material_id` | winning material ID; `-1` means no match |
+| `fit` | native spectral fit, decoded to floating point |
+| `depth` | native feature depth, decoded with its material scale |
+| `fit_depth` | native fit-depth (`fd`) metric |
+| `matched` | Boolean convenience mask |
+| `decisions` | metadata for each group/case on the final axis |
+| `materials` | material-ID-to-name catalog |
+| `provenance` | backend, native layout, and runtime details |
+
+By default, a temporary working directory is deleted after decoding. To keep
+the full native Tetracorder maps and logs, pass a new or empty directory:
+
+```python
+result = analyze(
+    spectrum,
+    wavelength=wavelength,
+    fwhm=profile.fwhm,
+    profile=profile,
+    output_dir="artifacts/run-001",
+)
+print(result.artifacts_path)
+```
+
+The nonempty-directory check prevents accidental overwrites.
+
+## Tests
+
+The default suite uses only fully synthetic spectra and skips the container
+integration test:
+
+```bash
+uv run pytest
+TETRACORDER_RUN_INTEGRATION=1 uv run pytest -m integration
+```
+
 # Source Code
 
 Github does not have the languages right.  The specpr and tetracorder programs are

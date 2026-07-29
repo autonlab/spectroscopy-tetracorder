@@ -1,6 +1,8 @@
 *.sif
 .venv/
 __pycache__/
+.pytest_cache/
+*.egg-info/
 
 # Tetracorder generated outputs
 cuprite95/*/results

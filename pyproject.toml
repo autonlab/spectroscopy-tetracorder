@@ -4,7 +4,14 @@ version = "0.1.0"
 description = "Python wrapper for USGS Tetracorder spectral analysis"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "numpy>=2.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -15,3 +22,10 @@ packages = ["tetracorderpy"]
 
 [project.scripts]
 tetracorderpy = "tetracorderpy.__main__:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+markers = [
+    "integration: requires an Apptainer/Singularity runtime and the Tetracorder 6.00 SIF",
+]
