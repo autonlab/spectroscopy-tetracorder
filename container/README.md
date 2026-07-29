@@ -1,4 +1,102 @@
-# Tetracorder Singularity Container Guide
+# Tetracorder 6.00 container
+
+This is the current container path used by `tetracorderpy`. The image is built
+from the checked-out Specpr and Tetracorder source plus the expert-system and
+spectral-library trees. It is not based on, or modified from, an older SIF.
+
+## Prerequisites
+
+- Apptainer with fakeroot build support
+- Enough temporary space for compilation and package installation
+- Network access to obtain the Ubuntu base image and system packages
+
+The completed SIF is self-contained at runtime. Python remains on the host;
+NumPy arrays are converted to a native cube in a per-call mounted work
+directory.
+
+## Clean source build
+
+From the repository root:
+
+```bash
+./container/build-tetracorder6.sh
+```
+
+The default output is `container/tetracorder6_00a5.sif`. An alternate output
+path may be supplied as the first argument:
+
+```bash
+./container/build-tetracorder6.sh /path/to/tetracorder6_test.sif
+```
+
+The output path must not exist. This refusal to overwrite is intentional: a
+new invocation always performs a clean build, while an old known-good image
+remains recoverable. The script defaults its Apptainer temporary and cache
+locations to `/tmp`; set `APPTAINER_TMPDIR` or `APPTAINER_CACHEDIR` before
+running it when the local filesystem is too small.
+
+The definition performs two independent Tetracorder builds from source:
+
+- `tetracorder6.00single`, using the large-channel single-spectrum dimensions
+- `tetracorder6.00`, using the native image-cube dimensions used by Python
+
+It also compiles Specpr and installs the expert system and convolved
+libraries. The build-time `%test` verifies both executables and the AVIRIS-95
+resources.
+
+## Verify an image
+
+```bash
+apptainer test container/tetracorder6_00a5.sif
+apptainer exec container/tetracorder6_00a5.sif \
+    sh -c 'test -x /usr/local/bin/tetracorder6.00'
+```
+
+The important in-image paths are:
+
+| Path | Purpose |
+|---|---|
+| `/usr/local/bin/tetracorder6.00` | native cube executable |
+| `/usr/local/bin/tetracorder6.00single` | upstream single-spectrum executable |
+| `/t1/tetracorder.cmds/tetracorder6.00a.cmds` | 6.00 expert system and presets |
+| `/sl1/usgs` | source and sensor-convolved spectral libraries |
+
+## Use from Python
+
+Install the host package with the uv-managed environment:
+
+```bash
+uv sync --group dev
+```
+
+Then call `tetracorderpy.analyze(...)`; see the root `README.md` for the NumPy
+tutorial, tensor shapes, ENVI adapter, and result schema. The backend
+automatically finds `container/tetracorder6*.sif`, or accepts an explicit
+`container=` path.
+
+For every `analyze()` call the wrapper:
+
+1. validates a format-independent `SpectralData` tensor and sensor profile;
+2. packs all spectra into one float32 BIP cube;
+3. mounts one temporary or user-selected directory at `/work`;
+4. creates the native Tetracorder run and launches one container process;
+5. decodes sparse native material maps into stable result tensors.
+
+Temporary artifacts are deleted by default. Pass `output_dir=` to retain the
+input cube, setup files, raw maps, `runner.log`, and `tetracorder.out`. The
+directory must be new or empty.
+
+The SIF is reused across calls and is never modified. It does not need to be
+rebuilt for each spectrum or cube.
+
+## Legacy notes
+
+The remainder of this file documents the older Tetracorder 5.27 container and
+SPECPR-record experiment. It is retained for historical context and for the
+upstream `cuprite95/example-01` tutorial, but it is not the current Python
+API.
+
+# Legacy Tetracorder 5.27 container guide
 
 This guide explains how to use the **USGS Tetracorder** system packaged in a Singularity container.
 
@@ -215,7 +313,11 @@ Detailed processing log showing which materials were enabled/disabled and the fu
 
 ---
 
-## 6. Python Wrapper
+## 6. Retired Python wrapper (historical)
+
+> The `tt.run(file_letter, record)` API below was an experimental 5.27
+> SPECPR-record wrapper and has been removed. Use `tetracorderpy.analyze()`
+> and the current tutorial at the top-level `README.md`.
 
 The `tetracorderpy` package provides a Python interface to Tetracorder.
 

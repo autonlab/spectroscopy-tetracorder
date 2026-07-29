@@ -84,7 +84,8 @@ Run the command:
 2) Single spectrum analysis. This mode is similar to the setup like in case 1 above. If no directory has been set up (no
 image cube, instead of cube, specify singlespectrum. Example:
 
-/t1/tetracorder.cmds/tetracorder5.27c.cmds/cmd-setup-tetrun testrun1 aviris_1995 singlespectrum nofollow -10 50 c 0.8 1.1 bar
+/t1/tetracorder.cmds/tetracorder6.00a.cmds/cmd-setup-tetrun testrun1 aviris_1995 \
+        singlespectrum nofollow -T -10 50 C -P 0.8 1.1 bar
 
 cd testrun1
 
@@ -93,11 +94,11 @@ Exit specpr
 
 Next, start teracorder with the command:
 
-tetracorder5.27single r1
+tetracorder6.00single r1
 
 then redirect input at the first command line prompt:
 
-<cmds.start.t5.27c.single
+<cmds.start.t6.00a.single
 
 Then analyze any spectrum in an assigned specpr file.
 
