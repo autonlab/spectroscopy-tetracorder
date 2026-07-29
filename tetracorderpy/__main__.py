@@ -1,4 +1,4 @@
-"""Command-line adapter for ENVI inputs."""
+"""Command-line adapter for ENVI analysis and runtime setup."""
 
 import argparse
 import json
@@ -34,7 +34,13 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = _parser().parse_args(argv)
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    if arguments[:1] == ["setup"]:
+        from .setup_runtime import setup_main
+
+        return setup_main(arguments[1:])
+
+    args = _parser().parse_args(arguments)
     try:
         data = read_envi(args.input)
         result = analyze(

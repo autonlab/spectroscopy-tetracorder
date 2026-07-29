@@ -20,6 +20,12 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["tetracorderpy"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"tetracorder.cmds/tetracorder6.00a.cmds/DATASETS" = "tetracorderpy/_data/tetracorder6.00a/DATASETS"
+"tetracorder.cmds/tetracorder6.00a.cmds/restart_files" = "tetracorderpy/_data/tetracorder6.00a/restart_files"
+"sl1/usgs/library06.conv/waves.txt" = "tetracorderpy/_data/tetracorder6.00a/aviris_1995/waves.txt"
+"sl1/usgs/library06.conv/resol.txt" = "tetracorderpy/_data/tetracorder6.00a/aviris_1995/resol.txt"
+
 [project.scripts]
 tetracorderpy = "tetracorderpy.__main__:main"
 

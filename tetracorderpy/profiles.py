@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import re
+from importlib import resources
+from importlib.resources.abc import Traversable
 from pathlib import Path
 
 import numpy as np
@@ -20,17 +22,54 @@ def repository_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
-def available_profiles(*, version: str = "6.00") -> tuple[str, ...]:
-    """List dataset presets bundled with the local Tetracorder checkout."""
+def _packaged_metadata_root() -> Traversable:
+    return resources.files("tetracorderpy").joinpath(
+        "_data", "tetracorder6.00a"
+    )
 
-    if version != "6.00":
-        return ()
-    dataset_dir = (
+
+def _dataset_directory() -> Traversable:
+    source = (
         repository_root()
         / "tetracorder.cmds"
         / "tetracorder6.00a.cmds"
         / "DATASETS"
     )
+    if source.is_dir():
+        return source
+    return _packaged_metadata_root().joinpath("DATASETS")
+
+
+def _restart_directory() -> Traversable:
+    source = (
+        repository_root()
+        / "tetracorder.cmds"
+        / "tetracorder6.00a.cmds"
+        / "restart_files"
+    )
+    if source.is_dir():
+        return source
+    return _packaged_metadata_root().joinpath("restart_files")
+
+
+def _response_directory() -> Traversable:
+    source = repository_root() / "sl1" / "usgs" / "library06.conv"
+    if (source / "waves.txt").is_file() and (source / "resol.txt").is_file():
+        return source
+    return _packaged_metadata_root().joinpath("aviris_1995")
+
+
+def _read_ascii(path: Traversable) -> str:
+    with path.open("r", encoding="ascii", errors="ignore") as stream:
+        return stream.read()
+
+
+def available_profiles(*, version: str = "6.00") -> tuple[str, ...]:
+    """List dataset presets bundled with the local Tetracorder checkout."""
+
+    if version != "6.00":
+        return ()
+    dataset_dir = _dataset_directory()
     if not dataset_dir.is_dir():
         return ()
     return tuple(
@@ -43,26 +82,34 @@ def available_profiles(*, version: str = "6.00") -> tuple[str, ...]:
 
 
 def _expected_bands(profile_name: str) -> int | None:
-    root = repository_root()
-    dataset_path = (
-        root
-        / "tetracorder.cmds"
-        / "tetracorder6.00a.cmds"
-        / "DATASETS"
-        / profile_name
-    )
+    dataset_path = _dataset_directory().joinpath(profile_name)
     if not dataset_path.is_file():
         return None
-    dataset_text = dataset_path.read_text(encoding="ascii", errors="ignore")
+    dataset_text = _read_ascii(dataset_path)
     restart_match = re.search(r"^restart=\s+(\S+)", dataset_text, re.MULTILINE)
     if restart_match is None:
         return None
-    restart_path = dataset_path.parent.parent / "restart_files" / restart_match.group(1)
+    restart_path = _restart_directory().joinpath(restart_match.group(1))
     if not restart_path.is_file():
         return None
-    restart_text = restart_path.read_bytes().decode("ascii", errors="ignore")
+    restart_text = _read_ascii(restart_path)
     bands_match = re.search(r"^nchans=\s*(\d+)", restart_text, re.MULTILINE)
     return int(bands_match.group(1)) if bands_match is not None else None
+
+
+def profile_deleted_value(profile_name: str) -> float:
+    """Return the native deleted-point marker for a dataset preset."""
+
+    dataset_path = _dataset_directory().joinpath(profile_name)
+    if dataset_path.is_file():
+        match = re.search(
+            r"^deletedpoint=\s*([-+0-9.eEdD]+)",
+            _read_ascii(dataset_path),
+            re.MULTILINE,
+        )
+        if match is not None:
+            return float(match.group(1).replace("D", "E").replace("d", "e"))
+    return -32767.0
 
 
 def get_profile(name: str, *, version: str = "6.00") -> SpectralProfile:
@@ -89,12 +136,14 @@ def get_profile(name: str, *, version: str = "6.00") -> SpectralProfile:
 
     expected_bands = _expected_bands(normalized)
     if normalized == "aviris_1995":
-        data_dir = repository_root() / "sl1" / "usgs" / "library06.conv"
-        wavelength_path = data_dir / "waves.txt"
-        fwhm_path = data_dir / "resol.txt"
+        data_dir = _response_directory()
+        wavelength_path = data_dir.joinpath("waves.txt")
+        fwhm_path = data_dir.joinpath("resol.txt")
         if wavelength_path.is_file() and fwhm_path.is_file():
-            wavelength = np.loadtxt(wavelength_path, dtype=np.float64)
-            fwhm = np.loadtxt(fwhm_path, dtype=np.float64)
+            with wavelength_path.open("r", encoding="ascii") as wavelength_stream:
+                wavelength = np.loadtxt(wavelength_stream, dtype=np.float64)
+            with fwhm_path.open("r", encoding="ascii") as fwhm_stream:
+                fwhm = np.loadtxt(fwhm_stream, dtype=np.float64)
             if wavelength.size == 224 and fwhm.size == 224:
                 return SpectralProfile(
                     normalized,

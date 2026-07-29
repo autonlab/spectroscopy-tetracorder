@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import gzip
-import os
 import re
 import shutil
 import subprocess
@@ -33,7 +32,8 @@ from ..models import (
     SpectralData,
     SpectralProfile,
 )
-from ..profiles import repository_root
+from ..profiles import profile_deleted_value
+from ..runtime import discover_container
 from .base import BackendCapabilities
 
 
@@ -74,35 +74,6 @@ def _tail(path: Path, *, characters: int = 12000) -> str:
     return text[-characters:]
 
 
-def _discover_container(explicit: str | Path | None) -> Path:
-    candidates: list[Path] = []
-    if explicit is not None:
-        candidates.append(Path(explicit).expanduser())
-    else:
-        environment_path = os.environ.get("TETRACORDER_CONTAINER")
-        if environment_path:
-            candidates.append(Path(environment_path).expanduser())
-        container_dir = repository_root() / "container"
-        candidates.extend(sorted(container_dir.glob("tetracorder6_*.sif")))
-        candidates.extend(sorted(container_dir.glob("tetracorder6*.sif")))
-
-    seen: set[Path] = set()
-    for candidate in candidates:
-        resolved = candidate.resolve()
-        if resolved in seen:
-            continue
-        seen.add(resolved)
-        if resolved.is_file():
-            return resolved
-
-    if explicit is not None:
-        raise BackendUnavailableError(f"Tetracorder container not found: {explicit}")
-    raise BackendUnavailableError(
-        "no Tetracorder 6.00 SIF was found; pass container= or set "
-        "TETRACORDER_CONTAINER"
-    )
-
-
 def _discover_runtime(explicit: str | Path | None) -> str:
     if explicit is not None:
         requested = str(explicit)
@@ -119,26 +90,6 @@ def _discover_runtime(explicit: str | Path | None) -> str:
     raise BackendUnavailableError(
         "neither Apptainer nor Singularity is available on PATH"
     )
-
-
-def _profile_deleted_value(profile_name: str) -> float:
-    dataset_path = (
-        repository_root()
-        / "tetracorder.cmds"
-        / "tetracorder6.00a.cmds"
-        / "DATASETS"
-        / profile_name
-    )
-    if dataset_path.is_file():
-        text = dataset_path.read_text(encoding="ascii", errors="ignore")
-        match = re.search(
-            r"^deletedpoint=\s*([-+0-9.eEdD]+)",
-            text,
-            re.MULTILINE,
-        )
-        if match is not None:
-            return float(match.group(1).replace("D", "E").replace("d", "e"))
-    return -32767.0
 
 
 def _parse_scale_entries(path: Path) -> tuple[_ScaleEntry, ...]:
@@ -422,7 +373,7 @@ class Tetracorder600Backend:
         container: str | Path | None = None,
         runtime: str | Path | None = None,
     ) -> None:
-        self.container = _discover_container(container)
+        self.container = discover_container(container)
         self.runtime = _discover_runtime(runtime)
 
     def analyze(
@@ -448,7 +399,7 @@ class Tetracorder600Backend:
 
         work_dir.mkdir(parents=True, exist_ok=True)
         input_path = work_dir / "input"
-        deleted_value = _profile_deleted_value(profile_name)
+        deleted_value = profile_deleted_value(profile_name)
         layout = write_packed_envi(
             input_path,
             data,

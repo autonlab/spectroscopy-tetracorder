@@ -29,6 +29,10 @@ class BackendCapabilityError(TetracorderError, ValueError):
     """The input exceeds a backend's compiled capabilities."""
 
 
+class RuntimeSetupError(TetracorderError, RuntimeError):
+    """The Tetracorder container could not be provisioned or verified."""
+
+
 class TetracorderExecutionError(TetracorderError, RuntimeError):
     """Tetracorder failed to complete or did not produce valid output."""
 

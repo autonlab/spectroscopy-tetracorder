@@ -57,7 +57,41 @@ the Tetracorder command language, SPECPR records, or its working-file layout.
 
 The wrapper requires Python 3.12+,
 [uv](https://docs.astral.sh/uv/), Apptainer or Singularity, and a
-Tetracorder 6.00 image. From the repository root:
+Tetracorder 6.00 image. On PSC, add the current fork branch directly to a uv
+project:
+
+```bash
+uv add 'spectroscopy-tetracorder @ git+https://github.com/autonlab/spectroscopy-tetracorder.git@fanurs/a-more-standalone-example'
+```
+
+The wheel contains the Python package and about 600 KB of sensor-profile
+metadata, not the SIF or the multi-gigabyte spectral-library tree. It
+automatically discovers the project image at:
+
+```text
+/ocean/projects/cis250251p/shared/containers/tetracorder/6.00a5/tetracorder-6.00a5.sif
+```
+
+An explicit file still wins via `container=` or `TETRACORDER_CONTAINER`.
+`TETRACORDER_CONTAINER_PATH` accepts a colon-separated list of additional
+image files or directories.
+
+If no usable shared image exists, provisioning is an explicit second step:
+
+```bash
+uv run tetracorderpy setup
+```
+
+The setup command never overwrites an image. It prefers a compatible source
+checkout already on PSC and otherwise shallow-clones the Git revision recorded
+by `uv add`, performs the clean source build, and runs the image's embedded
+test. Inspect its decision without cloning or building with:
+
+```bash
+uv run tetracorderpy setup --dry-run
+```
+
+Developers working in a source checkout can install and build directly:
 
 ```bash
 uv sync --group dev
@@ -67,10 +101,7 @@ uv sync --group dev
 The image build is a clean source build; it does not layer changes onto an
 older SIF. The script creates `container/tetracorder6_00a5.sif` and refuses
 to overwrite an existing image. See `container/README.md` for build details.
-
-At runtime, the wrapper searches for `container/tetracorder6*.sif` and for
-`apptainer` or `singularity` on `PATH`. A caller may instead pass
-`container=` and `runtime=`, or set `TETRACORDER_CONTAINER`.
+At runtime, the wrapper searches for `apptainer` or `singularity` on `PATH`.
 
 ## NumPy quick start
 
@@ -500,4 +531,3 @@ A. Swayze, David Vaniman, Srinivasan Vijayarangan, Faith Vilas,
 Shawn P. Wright, 2025, Rover Science Autonomy in Planetary
 Exploration: Field Analog Tests, Planetary Science Journal
 6:51. https://iopscience.iop.org/article/10.3847/PSJ/adaa78
-

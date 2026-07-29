@@ -71,8 +71,17 @@ uv sync --group dev
 
 Then call `tetracorderpy.analyze(...)`; see the root `README.md` for the NumPy
 tutorial, tensor shapes, ENVI adapter, and result schema. The backend
-automatically finds `container/tetracorder6*.sif`, or accepts an explicit
-`container=` path.
+automatically checks the source checkout, configured search paths, and the
+versioned PSC shared-container directory. It also accepts an explicit
+`container=` path. A Git-installed consumer can provision a missing image
+without embedding the SIF in its Python environment:
+
+```bash
+uv run tetracorderpy setup
+```
+
+Use `uv run tetracorderpy setup --dry-run` to inspect the selected source and
+output without cloning or building.
 
 For every `analyze()` call the wrapper:
 
