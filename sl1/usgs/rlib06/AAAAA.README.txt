@@ -5,7 +5,7 @@ spectra publiched after the sprlb06a publication (Clark et al., 2007).
 
 Some of the spectra here are in sprlb07a
 
-##### SIMPLEST methof for adding a new instrument convolved linbrary #####
+##### SIMPLEST method for adding a new instrument convolved linbrary #####
 
 after the s06* library has been built in sl1/usgs/library06.conv, do:
 
@@ -376,6 +376,10 @@ Commands:
 
 # AVIRIS 3
             ./mak.convol.library  r06a325  a  284   AVIRIS3-25 12  sleep 0.1  # AVIRIS 3 2025
+
+# AVIRIS-5:
+            ./mak.convol.library  r06a525  a  424   AVIRS525 12    sleep 0.1  # aviris-5 2025
+
 
 # AVIRIS-NG:
             ./mak.convol.library  r06an14  a  426   AVIRNG14 12  sleep 0.1 # aviris-ng 2014

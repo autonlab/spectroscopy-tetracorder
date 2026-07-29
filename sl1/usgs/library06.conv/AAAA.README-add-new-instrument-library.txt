@@ -76,6 +76,7 @@ annccyyd
          as = aster,
          av = aviris,  e.g. aviris 1995: av95a
          an = aviris-ng next gen
+         a5 = aviris 5
          cr = crism
          hd = Hydice,
          hy = HyMap
@@ -105,6 +106,7 @@ annccyyd
 
     Examples:
          s06av95a  # aviris 1995
+         s06a525a  # aviris 5 2025
          s06vm07a  # Cassini VIMS 2007 wavelengths
          s06mm09c  # Moon Mineralogy Mapper 2009 global wavelengths
          s06crj3a  # CRISM 2012 J_MTR3 merged V+IR version
@@ -151,6 +153,12 @@ STEP 5 details: run make.new.convol.library.start.file
         make.new.convol.library.start.file also makes a new restart file
 
     Examples:
+
+
+       ./make.new.convol.library.start.file  s06a525a 424 \
+              'Convolved AVIRIS5 2025 424 ch library   '  \
+              'Wavelengths in microns 424 ch AVIRIS525a' \
+              'Resolution  in microns 424 ch AVIRIS525a'
 
 
        ./make.new.convol.library.start.file  s06av18a 224 \
@@ -346,6 +354,10 @@ AVIRIS:
 AVIRIS-NG:
             ./mak.convol.library  s06an14  a  426   AVIRNG14 12  # aviris-ng 2014
             ./mak.convol.library  s06an14  b  425   AVIRNG14 12  # aviris-ng 2014
+
+AVIRIS-5:
+            ./mak.convol.library  s06a525  a  424   AVIRS525 12  # aviris-5 2025
+
 
 VIMS:
             ./mak.convol.library  s06vm07  a  352   VIMS07   12
