@@ -1,0 +1,204 @@
+Bootstrap: docker
+From: ubuntu:22.04
+
+%labels
+    Description USGS Tetracorder 6.00a5, built from Ubuntu source dependencies
+    Version 6.00a5
+    BuildMethod clean-source-build
+    UpstreamRepository https://github.com/PSI-edu/spectroscopy-tetracorder
+    SourceCommit TETRACORDER_SOURCE_COMMIT
+
+%files
+    specpr /home/src/local/specpr
+    tetracorder6.00 /home/src/local/tetracorder6.00
+    tetracorder.cmds /home/t1/tetracorder.cmds
+    sl1 /home/sl1
+
+%post
+    set -eu
+    export DEBIAN_FRONTEND=noninteractive
+
+    apt-get update
+    apt-get install -y --no-install-recommends \
+        ca-certificates gfortran gcc g++ make ratfor bison flex \
+        libx11-dev libxpm-dev libxt-dev \
+        libpng-dev libjbig-dev libjbig0 libjbig2dec0 libjbig2dec0-dev \
+        jbigkit-bin libjpeg-dev zlib1g zlib1g-dev \
+        imagemagick netpbm inotify-tools \
+        tcsh csh gnuplot-nox
+    rm -rf /var/lib/apt/lists/*
+
+    mkdir -p /usr/spool/gplot /usr/local/lib /usr/local/bin \
+        /usr/local/man/man1 /data
+    chmod 777 /usr/spool/gplot
+    touch /usr/spool/plot.log
+    chmod 666 /usr/spool/plot.log
+    ln -s /home/t1 /t1
+    ln -s /home/sl1 /sl1
+    ln -s /home/src /src
+
+    # Normalize known defects in the 6.00a5 upstream snapshot inside the
+    # image. Keeping these changes out of the checkout reduces conflicts when
+    # a newer official commit is merged. These are no-ops when already fixed.
+    setup_script=/home/t1/tetracorder.cmds/tetracorder6.00a.cmds/cmd-setup-tetrun
+    sed -i \
+        's@^dogeology=nogeology  \\# default no geologic origins$@dogeology=nogeology  # default no geologic origins@' \
+        "$setup_script"
+    grep -Fqx 'dogeology=nogeology  # default no geologic origins' \
+        "$setup_script"
+
+    expert_setup=/home/t1/tetracorder.cmds/tetracorder6.00a.cmds/cmd.lib.setup.t6.00a5
+    malformed_comments=$(grep -Fxc '|#' "$expert_setup" || true)
+    escaped_comments=$(grep -Fxc '\#' "$expert_setup" || true)
+    sed -i 's@^|#$@\\#@' "$expert_setup"
+    remaining_comments=$(grep -Fxc '|#' "$expert_setup" || true)
+    normalized_comments=$(grep -Fxc '\#' "$expert_setup" || true)
+    if [ "$remaining_comments" -ne 0 ] || \
+       [ "$normalized_comments" -ne "$((escaped_comments + malformed_comments))" ]
+    then
+        echo "could not normalize malformed Tetracorder comment" >&2
+        exit 1
+    fi
+
+    description_dir=/home/sl1/usgs/library06/DESCRIPT/M
+    test -f "$description_dir/mizzonite_bm931-12.html"
+    ln -sfn mizzonite_bm931-12.html \
+        "$description_dir/phrenite+muscovite-BM1931,12.html"
+    test "$(readlink \
+        "$description_dir/phrenite+muscovite-BM1931,12.html")" = \
+        mizzonite_bm931-12.html
+
+    export LD_LIBRARY_PATH=/usr/local/lib:/usr/lib/x86_64-linux-gnu
+    export LD_RUN_PATH=/usr/local/lib
+    export SSPPFLAGS="LINUX -INTEL -XWIN"
+    export SPECPR=/src/local/specpr
+    export RANDRET=32767
+    export SP_LOCAL=/usr/local
+    export SP_BIN=securebin
+    export SP_LDFLAGS=" "
+    export SP_LDLIBS=-lX11
+    export SPSDIR=syslinux
+    export RANLIB=ranlib
+    export SSPP=sspp
+    export F77=gfortran
+    export CC=cc
+    export AR=ar
+    export RF=ratfor
+    export YACC="bison -y"
+    export LEX=flex
+    export SP_FFLAGS="-C -O -m64"
+    export SP_FFLAGS1="-C -m64"
+    export SP_FFLAGS2="-C -m64"
+    export SPKLUDGE=LINUX
+    export BSLASH=-fno-backslash
+    export SP_FOPT=-O
+    export SP_FOPT1=-O
+    export SP_FOPT2=-O
+    export SP_RFLAGS="<"
+    export SP_CFLAGS="-O -m64"
+    export SP_ARFLAGS=rv
+    export SP_GFLAGS=-s
+    export SP_LFLAGS=" "
+    export SP_YFLAGS=" "
+    export mcmodelflags=-mcmodel=medium
+    export SP_OBJ=/src/local/specpr/obj
+    export SP_LIB=/src/local/specpr/lib
+    export SPSYSOBJ=/src/local/specpr/obj/syslinux.o
+    export LD=ld
+    export PATH=/usr/local/bin:$PATH
+
+    mkdir -p "$SP_OBJ" "$SP_LIB"
+
+    cd /src/local/specpr/src.sspp
+    gcc -o sspp sspp.c strcmpn.c
+    install -m 755 sspp /usr/local/bin/sspp
+    install -m 755 /src/local/specpr/utility/check_env /usr/local/bin/check_env
+
+    cd /src/local/specpr/src.lib
+    make
+    cd /src/local/specpr/src.specpr/syslinux
+    make
+    cd /src/local/specpr/src.specpr
+    make
+    make install
+
+    for build_dir in \
+        /src/local/specpr/src.sp_stamp \
+        /src/local/specpr/src.spprint/SRC \
+        /src/local/specpr/src.spsetwave/SRC \
+        /src/local/specpr/src.spsettitle/SRC \
+        /src/local/specpr/src.spratio2spectra/SRC \
+        /src/local/specpr/src.spfeatures/SRC \
+        /src/local/specpr/src.fstospecpr \
+        /src/local/specpr/src.tgifdaemon \
+        /src/local/specpr/src.psplotdaemon \
+        /src/local/specpr/src.datatran/SRC.asciitosp \
+        /src/local/specpr/src.datatran/SRC.sptoascii \
+        /src/local/specpr/src.oceanopticstospecpr
+    do
+        (cd "$build_dir" && make && make install) || true
+    done
+
+    for utility in specpr dspecpr radtran dradtran spfind sp_spool rule \
+        spedit fstospecpr-multiple logtetracorder specprhelp specprnt
+    do
+        cp "/src/local/specpr/utility/$utility" /usr/local/bin/ 2>/dev/null || true
+    done
+    cp /src/local/specpr/utility-davinci/davinci.print.specpr.to.ascii \
+        /usr/local/bin/ 2>/dev/null || true
+
+    cd /src/local/tetracorder6.00
+    rm -f ./*.o ./tetracorder6.00 ./tetracorder6.00single
+
+    # Build the large-channel single-spectrum executable first (block B).
+    sed -i '137,140s/^        parameter/#        parameter/' multmap.h
+    sed -i '144,147s/^#        parameter/        parameter/' multmap.h
+    test "$(sed -n '137,140p' multmap.h | grep -c '^#        parameter')" -eq 4
+    test "$(sed -n '144,147p' multmap.h | grep -c '^        parameter')" -eq 4
+    make installsingle
+
+    # Recompile with the image-cube dimensions (block A).
+    rm -f ./*.o ./tetracorder6.00 ./tetracorder6.00single
+    sed -i '144,147s/^        parameter/#        parameter/' multmap.h
+    sed -i '137,140s/^#        parameter/        parameter/' multmap.h
+    test "$(sed -n '137,140p' multmap.h | grep -c '^        parameter')" -eq 4
+    test "$(sed -n '144,147p' multmap.h | grep -c '^#        parameter')" -eq 4
+    make install
+
+    cp -f /t1/tetracorder.cmds/tetracorder6.00a.cmds/davinci-cmds.for.usr.local.bin/* \
+        /usr/local/bin/ 2>/dev/null || true
+
+%environment
+    export LD_LIBRARY_PATH=/usr/local/lib:/usr/lib/x86_64-linux-gnu
+    export LD_RUN_PATH=/usr/local/lib
+    export SSPPFLAGS="LINUX -INTEL -XWIN"
+    export SPECPR=/src/local/specpr
+    export RANDRET=32767
+    export SP_LOCAL=/usr/local
+    export SP_BIN=securebin
+    export SP_LDLIBS=-lX11
+    export SPSDIR=syslinux
+    export SSPP=sspp
+    export F77=gfortran
+    export CC=cc
+    export RF=ratfor
+    export SP_FFLAGS="-C -O -m64"
+    export SP_FFLAGS1="-C -m64"
+    export SP_FFLAGS2="-C -m64"
+    export SPKLUDGE=LINUX
+    export SP_RFLAGS="<"
+    export SP_CFLAGS="-O -m64"
+    export SP_OBJ=/src/local/specpr/obj
+    export SP_LIB=/src/local/specpr/lib
+    export PATH=/usr/local/bin:$PATH
+
+%test
+    test -x /usr/local/bin/specpr
+    test -x /usr/local/bin/tetracorder6.00
+    test -x /usr/local/bin/tetracorder6.00single
+    test -f /t1/tetracorder.cmds/tetracorder6.00a.cmds/cmd.lib.setup.t6.00a5
+    test -f /sl1/usgs/library06.conv/s06av95a
+    test -f /sl1/usgs/rlib06/r06av95a
+
+%runscript
+    exec /bin/bash "$@"

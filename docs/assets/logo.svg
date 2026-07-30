@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="tetracorderpy">
+  <defs>
+    <linearGradient id="g" x1="6" y1="52" x2="58" y2="10" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#12b8a6"/>
+      <stop offset="0.52" stop-color="#5f6df2"/>
+      <stop offset="1" stop-color="#d84ea4"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="56" height="56" rx="16" fill="#101b35"/>
+  <path d="M12 43c6-1 7-19 13-19s6 11 11 11 6-20 11-20 5 12 7 16" fill="none" stroke="url(#g)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M13 49h38" fill="none" stroke="#fff" stroke-opacity=".32" stroke-width="2" stroke-linecap="round"/>
+</svg>

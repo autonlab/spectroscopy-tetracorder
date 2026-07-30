@@ -2,9 +2,9 @@ SPECPR_Restart=2.00      # Restart Version
 #
 # file names
 #
-ivfl=/sl1/usgs/library07/splib07a                                                    
+ivfl=/sl1/usgs/library06.conv/s06emitc                                               
 iwfl=sprlb06a                                                                        
-idfl=/d1/rclark/data/oceanoptics2000+tests/spd0549                                   
+idfl=/dev/null
 iufl=/sl1/usgs/library06/splib06a                                                    
 iyfl=sprlb06b                                                                        
 isfl=/dev/null                                                                       
@@ -13,30 +13,30 @@ irfl=r.r06av13a
 #
 # protection number for open files (v,w,d,u,y,s)
 #
-iprtv=        -24213  # device protection v
-iprtw=          2069  # device protection w
-iprtd=        -61650  # device protection d
+iprtv=         -8219  # device protection v
+iprtw=          2291  # device protection w
+iprtd=         -8219  # device protection d
 iprtu=        -33842  # device protection u
-iprty=          2133  # device protection y
+iprty=          2349  # device protection y
 iprts=             0  # device protection s
 #
 # short 8 character names associated with file device letters
 #
-isavt=      splib07a  # file device letter v
+isavt=      s06emitc  # file device letter v
 iwdgt=      sprlb06a  # file device letter w
-iwrkt=      spd0549   # file device letter d
+iwrkt=      null      # file device letter d
 inmu=       splib06a  # file device letter u
 inmy=       sprlb06b  # file device letter y
 #
 # plot control values (real number format: ex. 0.23E+01)
 #
-wmina=  0.300000E+00  # plot min wavelength
-wmaxa=  0.260000E+01  # plot max wavelength
+wmina=  0.500000E+00  # plot min wavelength
+wmaxa=  0.250000E+01  # plot max wavelength
 bbnd=   0.000000E+00  # plot min reflectance
-ubnd=   0.000000E+00  # plot max reflectance
+ubnd=   0.832865E+00  # plot max reflectance
 #
 istarp(1)=         0  # star pack letter
-istarp(2)= 538976320  # star pack rec. no.
+istarp(2)= 538976304  # star pack rec. no.
 #
 alat=      0.0000000  # observatory lat in rads
 ra=        0.0000000  # right ascension in radians
@@ -49,10 +49,10 @@ iwch=              0  # wavelength calib shift
 #
 mag0=             -1  # mag tape drive 0
 mag1=             -1  # mag tape drive 1
-isavf=         13373  # file v
-iwjf=             16  # file w
-iwrkf=            12  # file d
-isvcu=          4161  # file u
+isavf=             1  # file v
+iwjf=           2292  # file w
+iwrkf=            19  # file d
+isvcu=            16  # file u
 iwjcy=           108  # file y
 istrf=             1  # file s
 ilpt=              1  # line printer
@@ -63,7 +63,7 @@ nchans=         2151  # num wave chans
 ibnrm1=           30  # band anal
 ibnrm2=           38  # band anal
 nchsav=            0  # num chan save
-iline=             3  # graphics line type
+iline=             1  # graphics line type
 #
 infmth=            0  #
 infopr=            1  #

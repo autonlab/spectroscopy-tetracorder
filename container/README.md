@@ -1,4 +1,111 @@
-# Tetracorder Singularity Container Guide
+# Tetracorder 6.00 container
+
+This is the current container path used by `tetracorderpy`. The image is built
+from the checked-out Specpr and Tetracorder source plus the expert-system and
+spectral-library trees. It is not based on, or modified from, an older SIF.
+
+## Prerequisites
+
+- Apptainer with fakeroot build support
+- Enough temporary space for compilation and package installation
+- Network access to obtain the Ubuntu base image and system packages
+
+The completed SIF is self-contained at runtime. Python remains on the host;
+NumPy arrays are converted to a native cube in a per-call mounted work
+directory.
+
+## Clean source build
+
+From the repository root:
+
+```bash
+./container/build-tetracorder6.sh
+```
+
+The default output is `container/tetracorder6_00a5.sif`. An alternate output
+path may be supplied as the first argument:
+
+```bash
+./container/build-tetracorder6.sh /path/to/tetracorder6_test.sif
+```
+
+The output path must not exist. This refusal to overwrite is intentional: a
+new invocation always performs a clean build, while an old known-good image
+remains recoverable. The script defaults its Apptainer temporary and cache
+locations to `/tmp`; set `APPTAINER_TMPDIR` or `APPTAINER_CACHEDIR` before
+running it when the local filesystem is too small.
+
+The definition performs two independent Tetracorder builds from source:
+
+- `tetracorder6.00single`, using the large-channel single-spectrum dimensions
+- `tetracorder6.00`, using the native image-cube dimensions used by Python
+
+It also compiles Specpr and installs the expert system and convolved
+libraries. The build-time `%test` verifies both executables and the AVIRIS-95
+resources.
+
+## Verify an image
+
+```bash
+apptainer test container/tetracorder6_00a5.sif
+apptainer exec container/tetracorder6_00a5.sif \
+    sh -c 'test -x /usr/local/bin/tetracorder6.00'
+```
+
+The important in-image paths are:
+
+| Path | Purpose |
+|---|---|
+| `/usr/local/bin/tetracorder6.00` | native cube executable |
+| `/usr/local/bin/tetracorder6.00single` | upstream single-spectrum executable |
+| `/t1/tetracorder.cmds/tetracorder6.00a.cmds` | 6.00 expert system and presets |
+| `/sl1/usgs` | source and sensor-convolved spectral libraries |
+
+## Use from Python
+
+Install the host package with the uv-managed environment:
+
+```bash
+uv sync --group dev
+```
+
+Then call `tetracorderpy.analyze(...)`; see the root `README.md` for the NumPy
+tutorial, tensor shapes, ENVI adapter, and result schema. The backend
+automatically checks the source checkout, configured search paths, and the
+versioned PSC shared-container directory. It also accepts an explicit
+`container=` path. A Git-installed consumer can provision a missing image
+without embedding the SIF in its Python environment:
+
+```bash
+uv run tetracorderpy setup
+```
+
+Use `uv run tetracorderpy setup --dry-run` to inspect the selected source and
+output without cloning or building.
+
+For every `analyze()` call the wrapper:
+
+1. validates a format-independent `SpectralData` tensor and sensor profile;
+2. packs all spectra into one float32 BIP cube;
+3. mounts one temporary or user-selected directory at `/work`;
+4. creates the native Tetracorder run and launches one container process;
+5. decodes sparse native material maps into stable result tensors.
+
+Temporary artifacts are deleted by default. Pass `output_dir=` to retain the
+input cube, setup files, raw maps, `runner.log`, and `tetracorder.out`. The
+directory must be new or empty.
+
+The SIF is reused across calls and is never modified. It does not need to be
+rebuilt for each spectrum or cube.
+
+## Legacy notes
+
+The remainder of this file documents the older Tetracorder 5.27 container and
+SPECPR-record experiment. It is retained for historical context and for the
+upstream `cuprite95/example-01` tutorial, but it is not the current Python
+API.
+
+# Legacy Tetracorder 5.27 container guide
 
 This guide explains how to use the **USGS Tetracorder** system packaged in a Singularity container.
 
@@ -215,7 +322,11 @@ Detailed processing log showing which materials were enabled/disabled and the fu
 
 ---
 
-## 6. Python Wrapper
+## 6. Retired Python wrapper (historical)
+
+> The `tt.run(file_letter, record)` API below was an experimental 5.27
+> SPECPR-record wrapper and has been removed. Use `tetracorderpy.analyze()`
+> and the current tutorial at the top-level `README.md`.
 
 The `tetracorderpy` package provides a Python interface to Tetracorder.
 
@@ -283,3 +394,115 @@ for match in result.matches:
 | `fit` | `float` | Fit score (0--1) |
 | `depth` | `float` | Absorption band depth (0--1) |
 | `fd` | `float` | Fit x Depth |
+
+---
+
+## 7. Using Other File Letters/Records (`y 300` is Just an Example)
+
+`y 300` is only one test case. In Tetracorder single-spectrum mode, the input is always:
+
+```text
+<FILE_LETTER> <RECORD_NUMBER>
+```
+
+For example:
+
+- `y 7128` (still from the convolved library)
+- `w 654` (from the reference library)
+
+### What the file letter means
+
+The letter (`y`, `w`, etc.) is resolved by the restart file `r1`:
+
+- `iyfl=...` and `inmy=...` define the file behind letter `y`
+- `iwfl=...` and `iwdgt=...` define the file behind letter `w`
+
+So you can use letters other than `y` as long as:
+
+1. That device letter is configured in `r1`
+2. The referenced library file exists inside the container
+3. The record number exists in that library
+
+### Python usage with different inputs
+
+No code changes are required. Just pass different arguments:
+
+```python
+import tetracorderpy as tt
+
+r1 = tt.run("y", 7128, work_dir="my-run")
+r2 = tt.run("w", 654, work_dir="my-run")
+```
+
+---
+
+## 8. New Data (Not `cuprite95`): What to Do
+
+You do **not** need to use the `cuprite95/` directory name. The current Python wrapper works with any directory that contains the required config files.
+
+### 8.1 If you only want single-spectrum analysis
+
+This is the simplest path.
+
+1. Create a new working directory (for example `my-data/run-01/`).
+2. Copy these four files into it:
+   - `r1`
+   - `cmds.start.t5.26a.single`
+   - `cmd.lib.setup.t5.2e1`
+   - `cmd.lib.setup.nots-ratios`
+3. Edit `r1` if needed to point to the correct libraries and channel count.
+4. Run from Python:
+
+```python
+import tetracorderpy as tt
+result = tt.run("y", 300, work_dir="my-data/run-01")
+```
+
+This mode does not require a hyperspectral cube file. It analyzes one library spectrum per call.
+
+### 8.2 If you need full cube mapping for a new instrument/cube
+
+This requires more setup and currently is **not** fully wrapped by `tetracorderpy`.
+
+High-level steps:
+
+1. Convolve spectral libraries for your instrument (create the `r06...` and `s06...` library files).
+2. Create/update a restart file (`r1-...`) with correct:
+   - library file paths
+   - file-letter mapping (`w`, `y`, etc.)
+   - `nchans`
+3. Add a dataset entry under:
+   - `tetracorder.cmds/tetracorder5.27a.cmds/DATASETS/`
+4. Add deleted-channel definition under:
+   - `tetracorder.cmds/tetracorder5.27a.cmds/DELETED.channels/`
+5. Generate a new run directory with:
+   - `cmd-setup-tetrun`
+6. Run tetracorder (`cmd.runtet cube ...`) and post-processing scripts.
+
+This is the official USGS workflow for new sensors.
+
+---
+
+## 9. Python-First Workflow (Current State)
+
+Current status:
+
+- `tetracorderpy` already supports Python-driven single-spectrum runs (`tt.run(...)`).
+- It accepts arbitrary file letters and record numbers.
+- `work_dir` can be any path, not just `cuprite95/example-01`.
+
+What is not yet wrapped:
+
+- End-to-end automation for creating a new dataset/instrument definition
+- Full cube-mode setup (`cmd-setup-tetrun`) and map post-processing
+
+Practical recommendation today:
+
+1. Use shell/command-file steps once to create a valid run directory for your new dataset.
+2. Use Python for repeated single-spectrum analyses and result parsing.
+3. Add Python automation for dataset bootstrap in a later phase.
+
+If you want, a next step is to add a new Python helper like:
+
+- `tetracorderpy.bootstrap_run_dir(...)` for `cmd-setup-tetrun`
+- `tetracorderpy.run_cube(...)` for `cmd.runtet cube`

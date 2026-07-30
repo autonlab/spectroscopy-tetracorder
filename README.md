@@ -46,6 +46,253 @@ The tetracorder system also requires
 
 Tetracorder, Specpr, and support programs run on linux and unix.
 
+# Python interface (Tetracorder 6.00)
+
+The `tetracorderpy` package accepts reflectance spectra as NumPy-like tensors,
+runs the Tetracorder 6.00 native cube workflow once per call, and decodes the
+native map files back into aligned NumPy arrays. Callers do not need to know
+the Tetracorder command language, SPECPR records, or its working-file layout.
+
+## Setup
+
+The wrapper requires Python 3.12+,
+[uv](https://docs.astral.sh/uv/), Apptainer or Singularity, and a
+Tetracorder 6.00 image. On PSC, install the package from the group-readable
+deployment checkout:
+
+```bash
+uv add /ocean/projects/cis250251p/shared/repos/spectroscopy-tetracorder
+```
+
+The absolute path is intentional for this PSC allocation. uv builds a normal,
+non-editable wheel in the consumer project. The shared checkout is a pull-only
+deployment mirror; development and commits happen in a personal checkout and
+are pushed to the GitHub fork before a maintainer fast-forwards the shared
+copy. The wheel contains the Python package and compact sensor-profile
+metadata, not the SIF or the multi-gigabyte spectral-library tree. It
+automatically discovers the project image at:
+
+```text
+/ocean/projects/cis250251p/shared/containers/tetracorder/6.00a5/tetracorder-6.00a5.sif
+```
+
+An explicit file still wins via `container=` or `TETRACORDER_CONTAINER`.
+`TETRACORDER_CONTAINER_PATH` accepts a colon-separated list of additional
+image files or directories.
+
+If no usable shared image exists, provisioning is an explicit second step:
+
+```bash
+uv run tetracorderpy setup
+```
+
+The setup command never overwrites an image. It prefers a compatible installed
+or shared source checkout, performs a clean source build only when no image is
+available, records the source commit in new image labels, and runs the image's
+embedded test. Inspect its decision without cloning or building with:
+
+```bash
+uv run tetracorderpy setup --dry-run
+```
+
+Developers working in a source checkout can install and build directly:
+
+```bash
+uv sync --group dev --group docs --group notebook
+./container/build-tetracorder6.sh
+```
+
+The image build is a clean source build; it does not layer changes onto an
+older SIF. The script creates `container/tetracorder6_00a5.sif` and refuses
+to overwrite an existing image. See `container/README.md` for build details.
+At runtime, the wrapper searches for `apptainer` or `singularity` on `PATH`.
+
+## Documentation website
+
+The modern documentation site includes installation, hyperspectral concepts,
+sampling and sensor-profile constraints, AVIRIS and ENVI guides, large-cube
+memory guidance, results, runtime behavior, generated API reference, test
+documentation, and an [executed Jupyter tutorial](docs/tutorials/python-api-tutorial.ipynb)
+with saved plots and real 6.00a5 outputs. Build or preview it entirely through
+uv; Node/npm is not required:
+
+```bash
+uv sync --group docs
+uv run --group docs mkdocs serve
+uv run --group docs mkdocs build --strict
+```
+
+Re-execute the saved notebook with:
+
+```bash
+uv run --group notebook jupyter execute docs/tutorials/python-api-tutorial.ipynb --inplace --timeout=1200
+```
+
+## NumPy quick start
+
+This example constructs a smooth, minimally plausible reflectance curve. It
+does not copy a spectrum from a reference library:
+
+```python
+import numpy as np
+
+from tetracorderpy import analyze, get_profile
+
+profile = get_profile("aviris_1995")
+wavelength = profile.wavelength
+assert wavelength is not None
+
+continuum = 0.47 + 0.07 * (wavelength - wavelength.min()) / np.ptp(wavelength)
+spectrum = continuum.copy()
+for center, depth, width in (
+    (0.92, 0.11, 0.065),
+    (2.20, 0.13, 0.035),
+    (2.33, 0.055, 0.030),
+):
+    spectrum -= depth * np.exp(-0.5 * ((wavelength - center) / width) ** 2)
+spectrum = np.clip(spectrum, 0.02, 0.98).astype(np.float32)
+
+result = analyze(
+    spectrum,
+    wavelength=wavelength,
+    fwhm=profile.fwhm,
+    profile=profile,
+)
+
+for index, decision in enumerate(result.decisions):
+    if result.matched[index]:
+        material_id = int(result.material_id[index])
+        print(
+            decision.name,
+            result.material_name(material_id),
+            float(result.fit[index]),
+            float(result.depth[index]),
+            float(result.fit_depth[index]),
+        )
+```
+
+A made-up spectrum is useful as an execution and schema test. Its geological
+identifications are not validation data; scientific results still require
+appropriate calibration and domain review.
+
+## One API for a spectrum, batch, or cube
+
+`analyze()` accepts any number of leading sample dimensions and one shared
+spectral axis. The spectral axis is last by default; use `spectral_axis=` when
+it is elsewhere.
+
+| Input shape | Meaning | Result-array shape |
+|---|---|---|
+| `(bands,)` | one spectrum | `(decisions,)` |
+| `(n, bands)` | a batch | `(n, decisions)` |
+| `(y, x, bands)` | a hyperspectral cube | `(y, x, decisions)` |
+| `(..., bands)` | arbitrary tensor | `(..., decisions)` |
+
+All spectra in one call share wavelength, FWHM, and sensor profile metadata.
+They are packed into one native cube, so a batch or cube launches one
+container process—not one process per spectrum. Because the backend is
+one-shot and has no persistent server, combine many spectra into one call
+instead of calling `analyze()` in a Python loop.
+
+The final decision axis is stable for the selected expert system. It includes
+every configured group and case even when Tetracorder omits an empty native
+map.
+
+## Input model and sensor profiles
+
+`SpectralData` is the format-independent model. It stores reflectance values,
+wavelength, optional FWHM, an optional broadcastable mask, dimension names,
+coordinates, and metadata. Wavelength and FWHM are canonicalized to
+micrometers; pass `wavelength_unit="nm"` for nanometers. NaN, infinity, and
+masked cells become native deleted values.
+
+`SpectralProfile` is separate from the array and from its disk format. It
+identifies the sensor response and the matching Tetracorder dataset preset.
+Exact wavelength and FWHM arrays are packaged for `aviris_1995`,
+`aviris_2024`, `emit_c`, and `aviris5_2025`; other bundled native presets are
+explicitly labeled as band-count-only validation. The two AVIRIS presets share
+the same wavelength grid but select different restart configurations, so
+automatic profile resolution refuses to guess between them.
+
+A wavelength array alone is not enough to make an arbitrary instrument
+compatible: Tetracorder also needs reference libraries convolved to that
+sensor response and a matching dataset preset. Advanced users can construct
+a `SpectralProfile` with a custom `backend_profile` after adding those native
+resources. The backend seam leaves room for later work, but only Tetracorder
+6.00 is supported; 5.27 is not exposed or routed through the Python API.
+
+## ENVI and other file formats
+
+File parsing is deliberately outside the analysis model. The included ENVI
+adapter handles BIP, BIL, and BSQ inputs and common wavelength, FWHM, bad-band,
+ignore-value, and reflectance-scale header fields:
+
+```python
+from tetracorderpy import analyze
+from tetracorderpy.formats import read_envi
+
+data = read_envi("scene/image")
+result = analyze(data, profile="aviris_1995")
+```
+
+Additional formats can be implemented as adapters that produce
+`SpectralData`; the Tetracorder backend does not need to change.
+
+The equivalent ENVI command-line entry point is:
+
+```bash
+uv run tetracorderpy scene/image --profile aviris_1995
+```
+
+## Results and native artifacts
+
+Each compact result array has shape `input_sample_shape + (decisions,)`:
+
+| Attribute | Meaning |
+|---|---|
+| `material_id` | winning material ID; `-1` means no match |
+| `fit` | native spectral fit, decoded to floating point |
+| `depth` | native feature depth, decoded with its material scale |
+| `fit_depth` | native fit-depth (`fd`) metric |
+| `matched` | Boolean convenience mask |
+| `decisions` | metadata for each group/case on the final axis |
+| `materials` | material-ID-to-name catalog |
+| `provenance` | backend, native layout, and runtime details |
+| `dims`, `coords` | caller labels aligned to the returned decision tensor |
+| `input_metadata` | caller metadata carried from `SpectralData` |
+
+By default, a temporary working directory is deleted after decoding. Put that
+ephemeral work on job-local scratch with `scratch_dir=` or
+`TETRACORDER_TMPDIR`; this does not retain native files. Temporary input
+packing is line-bounded rather than allocating a full-cube invalid mask.
+
+To keep the full native Tetracorder maps and logs, pass a new or empty
+directory:
+
+```python
+result = analyze(
+    spectrum,
+    wavelength=wavelength,
+    fwhm=profile.fwhm,
+    profile=profile,
+    output_dir="artifacts/run-001",
+)
+print(result.artifacts_path)
+```
+
+The nonempty-directory check prevents accidental overwrites.
+
+## Tests
+
+The default suite validates the Python layer and the saved executed notebook.
+Opt-in integration tests run synthetic spectra through the actual container,
+including native batch-versus-single equivalence:
+
+```bash
+uv run pytest
+TETRACORDER_RUN_INTEGRATION=1 uv run pytest -m integration
+```
+
 # Source Code
 
 Github does not have the languages right.  The specpr and tetracorder programs are
@@ -288,3 +535,35 @@ of specpr text records.
 If you want a python specpr file reading routine, check here:
 
 specpr/src.opal-py-python-specpr-reader-plots
+
+# April 2, 2026
+
+Spectral libraries for several instruments added, including AVIRIS classic 2019 thru 2024.
+
+Tetracorder source code expanded to handle the increased size of Tetracorder
+the expert system 5.27g series.
+
+Added Tetracorder expert system 5.27g.  This expert system is the starting candidate
+for EMIT recalculations that will use an updated reflectance model.  Expert system
+5.27g2 includes fixes to improve identification and mapping accuracy from our experience
+mapping the world with EMIT data, and further verifications with AVIRIS data.
+Expert system 5.27g2 is the starting point for Tetracorder 6.00 that will be
+used for the EMIT recalculations with new capabilities based on
+Noe Dobrea et al., 2025.  REE Group 20 in 5.27g2 will be removed in
+6.00a3 and used for something else in the future, and REE group 21 will
+remain as the main REE detection group.
+
+AS ALWAYS, all Tetracorder results should be verified for accuracy, and the 
+AAAAA.KNOWN-ISSUES.txt file read in full to understand limitations.
+Small errors in reflectance model accuracy can affect identifications.
+
+Noe Dobrea, Eldar Z., Maria E. Banks, Roger N. Clark, David
+Wettergreen, Amanda Hendrix, Caitlin Ahrens, Ernie Bell,
+Abigail Breitfeld, Thomas F. Bristow, Sanlyn Buxner, Alberto
+Candela, Margaret Hansen, Greg Holsclaw, Paul Knightly, Georgiana
+Kramer, Nandita Kumari, Melissa D. Lane, Audrey Martin, McKayla
+Meier, Ruby Patterson, Neil Pearson, Thomas Prettyman, Greg
+A. Swayze, David Vaniman, Srinivasan Vijayarangan, Faith Vilas,
+Shawn P. Wright, 2025, Rover Science Autonomy in Planetary
+Exploration: Field Analog Tests, Planetary Science Journal
+6:51. https://iopscience.iop.org/article/10.3847/PSJ/adaa78

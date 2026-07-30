@@ -27,7 +27,7 @@
 # #                prog              lib     n  chan  title    fwhm
 #                                                   keyword  rec number
 
-# AVIRIS:
+# AVIRIS classic:
             ./mak.convol.library  s06av95  a  224   AVIRIS95 12  # aviris 1995
             ./mak.convol.library  s06av97  a  224   AVIRIS97 12  # aviris 1997
             ./mak.convol.library  s06av98  a  224   AVIRIS98 12  # aviris 1998
@@ -41,12 +41,23 @@
             ./mak.convol.library  s06av12  a  224   AVIRIS12 12  # aviris 2012
             ./mak.convol.library  s06av13  a  224   AVIRIS13 12  # aviris 2013
             ./mak.convol.library  s06av17  a  224   AVIRIS17 12  # aviris 2017
-            ./mak.convol.library  s06av18  a  224   AVIRIS17 12  # aviris 2018
+            ./mak.convol.library  s06av18  a  224   AVIRIS18 12  # aviris 2018
+
+            ./mak.convol.library  s06av19  a  224   AVIRIS19 12  # aviris 2019
+            ./mak.convol.library  s06av20  a  224   AVIRIS20 12  # aviris 2020
+            ./mak.convol.library  s06av21  a  224   AVIRIS21 12  # aviris 2021
+            ./mak.convol.library  s06av22  a  224   AVIRIS22 12  # aviris 2022
+            ./mak.convol.library  s06av23  a  224   AVIRIS23 12  # aviris 2023
+            ./mak.convol.library  s06av24  a  224   AVIRIS24 12  # aviris 2024
 
 # AVIRIS-NG:
             ./mak.convol.library  s06an14  a  426   AVIRNG14 12  # aviris-ng 2014
             ./mak.convol.library  s06an14  b  425   AVIRNG14 12  # aviris-ng 2014
             ./mak.convol.library  s06an21  a  425   AVIRNG14 12  # aviris-ng 2014
+
+# AVIRIS-5:
+            ./mak.convol.library  s06a525  a  424   AVIRS525 12  # aviris-5 2025
+
 
 # EMIT:
             ./mak.convol.library  s06emit  a  288   EMIT22a  12  # EMIT before launch to Space Station

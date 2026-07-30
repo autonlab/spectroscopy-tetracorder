@@ -143,6 +143,8 @@ EOF
 
 	   sp_stamp ${lib}    # adds header so davinci can read the file.
 
+	   spprint ${lib} > ${lib}-list.txt
+
 	echo "convolved spectral library   $lib    complete."
 else
 	echo "ERROR: file $conv not created"

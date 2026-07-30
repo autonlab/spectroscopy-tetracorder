@@ -1,0 +1,126 @@
+site_name: tetracorderpy
+site_description: Unofficial working documentation for a Python interface to Tetracorder 6.00
+site_url: https://autonlab.github.io/spectroscopy-tetracorder/
+repo_name: autonlab/spectroscopy-tetracorder
+repo_url: https://github.com/autonlab/spectroscopy-tetracorder
+edit_uri: edit/main/docs/
+copyright: Unofficial fork documentation; no upstream or agency endorsement.
+
+theme:
+  name: material
+  language: en
+  logo: assets/logo.svg
+  favicon: assets/logo.svg
+  icon:
+    repo: fontawesome/brands/github
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.indexes
+    - navigation.path
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+plugins:
+  - search
+  - mkdocs-jupyter:
+      execute: false
+      include_source: true
+      ignore_h1_titles: true
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: ["."]
+          options:
+            docstring_style: google
+            heading_level: 2
+            show_root_heading: true
+            show_root_full_path: false
+            show_source: false
+            show_signature_annotations: true
+            separate_signature: true
+            merge_init_into_class: true
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+
+extra_css:
+  - stylesheets/extra.css
+
+extra_javascript:
+  - javascripts/synthetic-aviris-1995.min.js
+  - javascripts/spectrum-plot.js
+
+nav:
+  - Home: index.md
+  - Start:
+      - Installation on PSC: getting-started/installation.md
+      - First analysis: getting-started/quickstart.md
+      - Executed Python tutorial: tutorials/python-api-tutorial.ipynb
+  - Learn:
+      - Hyperspectral data: concepts/hyperspectral-data.md
+      - Sampling & sensor profiles: concepts/sampling-and-profiles.md
+      - Libraries & matching: concepts/libraries-and-matching.md
+      - Native modes & parameters: concepts/native-modes.md
+  - Data formats:
+      - PSC shared examples: data/psc-shared-datasets.md
+      - AVIRIS: data/aviris.md
+      - ENVI: data/envi.md
+  - User guide:
+      - Tensors & metadata: guides/tensors.md
+      - Large cubes & memory: guides/large-cubes.md
+      - Results & artifacts: guides/results.md
+      - Runtime & containers: guides/runtime.md
+  - API:
+      - API map: reference/index.md
+      - Analysis & models: reference/analysis.md
+      - Profiles: reference/profiles.md
+      - ENVI adapter: reference/formats.md
+      - Errors: reference/errors.md
+  - Project:
+      - Upstream sync & deployment: development/upstream-sync.md
+      - Testing & documentation: development/testing.md
+      - License & disclaimer: development/license-and-disclaimer.md
