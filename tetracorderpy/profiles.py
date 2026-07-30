@@ -12,8 +12,45 @@ import numpy as np
 from .errors import ProfileMismatchError, UnsupportedProfileError
 from .models import SpectralData, SpectralProfile
 
-
 _SAFE_PROFILE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.+-]*$")
+
+
+# Native response grids used by shared PSC products and the synthetic tutorial.
+# Paths are relative to the official repository checkout. Scale factors convert
+# each ASCII source to micrometers before constructing a SpectralProfile.
+_PROFILE_RESPONSES: dict[
+    str,
+    tuple[str, str, float, float, str],
+] = {
+    "aviris_1995": (
+        "sl1/usgs/library06.conv/waves.txt",
+        "sl1/usgs/library06.conv/resol.txt",
+        1.0,
+        1.0,
+        "USGS s06av95a calibration records",
+    ),
+    "aviris_2024": (
+        "sl1/usgs/library06.conv/waves.ascii.files/aviris-classic-2024-waves.txt",
+        "sl1/usgs/library06.conv/waves.ascii.files/aviris-classic-2024-fwhm.txt",
+        1.0,
+        1.0,
+        "USGS AVIRIS Classic 2024 response tables",
+    ),
+    "emit_c": (
+        "sl1/usgs/library06.conv/waves.ascii.files/waves-emit_wl_20220813.txt",
+        "sl1/usgs/library06.conv/waves.ascii.files/resol-emit_fwhm_20220813.txt",
+        1.0,
+        1.0,
+        "USGS EMIT-C 2022 response tables",
+    ),
+    "aviris5_2025": (
+        "sl1/usgs/library06.conv/waves.ascii.files/aviris-5-2025_waves.txt",
+        "sl1/usgs/library06.conv/waves.ascii.files/aviris-5-2025_fwhm-nm.txt",
+        1.0,
+        1.0e-3,
+        "USGS AVIRIS-5 2025 response tables",
+    ),
+}
 
 
 def repository_root() -> Path:
@@ -23,17 +60,12 @@ def repository_root() -> Path:
 
 
 def _packaged_metadata_root() -> Traversable:
-    return resources.files("tetracorderpy").joinpath(
-        "_data", "tetracorder6.00a"
-    )
+    return resources.files("tetracorderpy").joinpath("_data", "tetracorder6.00a")
 
 
 def _dataset_directory() -> Traversable:
     source = (
-        repository_root()
-        / "tetracorder.cmds"
-        / "tetracorder6.00a.cmds"
-        / "DATASETS"
+        repository_root() / "tetracorder.cmds" / "tetracorder6.00a.cmds" / "DATASETS"
     )
     if source.is_dir():
         return source
@@ -52,11 +84,29 @@ def _restart_directory() -> Traversable:
     return _packaged_metadata_root().joinpath("restart_files")
 
 
-def _response_directory() -> Traversable:
-    source = repository_root() / "sl1" / "usgs" / "library06.conv"
-    if (source / "waves.txt").is_file() and (source / "resol.txt").is_file():
-        return source
-    return _packaged_metadata_root().joinpath("aviris_1995")
+def _response_paths(
+    profile_name: str,
+) -> tuple[Path | Traversable, Path | Traversable, float, float, str] | None:
+    specification = _PROFILE_RESPONSES.get(profile_name)
+    if specification is None:
+        return None
+    wavelength_relative, fwhm_relative, wavelength_scale, fwhm_scale, source = (
+        specification
+    )
+    checkout = repository_root()
+    wavelength_path = checkout / wavelength_relative
+    fwhm_path = checkout / fwhm_relative
+    if wavelength_path.is_file() and fwhm_path.is_file():
+        return wavelength_path, fwhm_path, wavelength_scale, fwhm_scale, source
+
+    packaged = _packaged_metadata_root().joinpath("responses", profile_name)
+    return (
+        packaged.joinpath("wavelength.txt"),
+        packaged.joinpath("fwhm.txt"),
+        wavelength_scale,
+        fwhm_scale,
+        source,
+    )
 
 
 def _read_ascii(path: Traversable) -> str:
@@ -115,9 +165,9 @@ def profile_deleted_value(profile_name: str) -> float:
 def get_profile(name: str, *, version: str = "6.00") -> SpectralProfile:
     """Load metadata for a bundled profile.
 
-    The AVIRIS-1995 calibration arrays are available as upstream ASCII files.
-    Other bundled presets are still usable by explicit name and are validated
-    by their restart-file channel count.
+    Exact response arrays are packaged for selected profiles used by the
+    Python tutorial and PSC shared datasets. Other native presets remain
+    available by explicit name and validate their restart-file channel count.
     """
 
     normalized = name.strip()
@@ -135,30 +185,46 @@ def get_profile(name: str, *, version: str = "6.00") -> SpectralProfile:
         )
 
     expected_bands = _expected_bands(normalized)
-    if normalized == "aviris_1995":
-        data_dir = _response_directory()
-        wavelength_path = data_dir.joinpath("waves.txt")
-        fwhm_path = data_dir.joinpath("resol.txt")
-        if wavelength_path.is_file() and fwhm_path.is_file():
-            with wavelength_path.open("r", encoding="ascii") as wavelength_stream:
-                wavelength = np.loadtxt(wavelength_stream, dtype=np.float64)
-            with fwhm_path.open("r", encoding="ascii") as fwhm_stream:
-                fwhm = np.loadtxt(fwhm_stream, dtype=np.float64)
-            if wavelength.size == 224 and fwhm.size == 224:
-                return SpectralProfile(
-                    normalized,
-                    backend_profile=normalized,
-                    backend_version=version,
-                    wavelength=wavelength,
-                    fwhm=fwhm,
-                    metadata={"source": "USGS s06av95a calibration records"},
-                )
+    response = _response_paths(normalized)
+    if response is not None:
+        wavelength_path, fwhm_path, wavelength_scale, fwhm_scale, source = response
+        if not wavelength_path.is_file() or not fwhm_path.is_file():
+            raise UnsupportedProfileError(
+                f"calibration metadata for profile {normalized!r} is missing"
+            )
+        with wavelength_path.open("r", encoding="ascii") as wavelength_stream:
+            wavelength = (
+                np.loadtxt(wavelength_stream, dtype=np.float64) * wavelength_scale
+            )
+        with fwhm_path.open("r", encoding="ascii") as fwhm_stream:
+            fwhm = np.loadtxt(fwhm_stream, dtype=np.float64) * fwhm_scale
+        if wavelength.ndim != 1 or fwhm.shape != wavelength.shape:
+            raise UnsupportedProfileError(
+                f"invalid calibration arrays for profile {normalized!r}"
+            )
+        if expected_bands is not None and wavelength.size != expected_bands:
+            raise UnsupportedProfileError(
+                f"profile {normalized!r} expects {expected_bands} bands but its "
+                f"calibration contains {wavelength.size}"
+            )
+        return SpectralProfile(
+            normalized,
+            backend_profile=normalized,
+            backend_version=version,
+            wavelength=wavelength,
+            fwhm=fwhm,
+            metadata={
+                "source": source,
+                "validation": "wavelength_and_fwhm",
+            },
+        )
 
     return SpectralProfile(
         normalized,
         backend_profile=normalized,
         backend_version=version,
         expected_bands=expected_bands,
+        metadata={"validation": "band_count_only"},
     )
 
 
@@ -177,7 +243,7 @@ def resolve_profile(
         resolved = get_profile(profile, version=version)
     elif profile is None:
         candidates: list[SpectralProfile] = []
-        for known_name in ("aviris_1995",):
+        for known_name in _PROFILE_RESPONSES:
             try:
                 candidate = get_profile(known_name, version=version)
                 candidate.validate(data)

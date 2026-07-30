@@ -29,6 +29,11 @@ def _parser() -> argparse.ArgumentParser:
         type=Path,
         help="keep raw native artifacts here (must be absent or empty)",
     )
+    parser.add_argument(
+        "--scratch-dir",
+        type=Path,
+        help="parent for temporary native work (deleted after decoding)",
+    )
     parser.add_argument("--timeout", type=float, default=300.0)
     return parser
 
@@ -49,6 +54,7 @@ def main(argv: list[str] | None = None) -> int:
             container=args.container,
             runtime=args.runtime,
             output_dir=args.output_dir,
+            scratch_dir=args.scratch_dir,
             timeout=args.timeout,
         )
     except (TetracorderError, FileNotFoundError, OSError) as exc:

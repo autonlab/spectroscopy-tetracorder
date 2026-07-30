@@ -10,10 +10,10 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from collections.abc import Iterator
 from contextlib import contextmanager
 from importlib import metadata
 from pathlib import Path
-from typing import Iterator
 from urllib.parse import unquote, urlparse
 
 from .errors import RuntimeSetupError
@@ -22,7 +22,6 @@ from .runtime import (
     PSC_SHARED_SOURCE_CHECKOUT,
     default_shared_container,
 )
-
 
 _DISTRIBUTION = "spectroscopy-tetracorder"
 _DEFAULT_REPOSITORY = "https://github.com/autonlab/spectroscopy-tetracorder.git"
@@ -185,9 +184,7 @@ def _cloned_source(
                     target_commit,
                 ]
             )
-            _run(
-                ["git", "-C", str(checkout), "checkout", "--detach", target_commit]
-            )
+            _run(["git", "-C", str(checkout), "checkout", "--detach", target_commit])
         if target_commit and _git_head(checkout) != target_commit:
             raise RuntimeSetupError(
                 f"cloned source does not match requested commit {target_commit}"
@@ -214,8 +211,9 @@ def setup_runtime(
     """Reuse or build the supported SIF and return its stable path.
 
     Existing images are never overwritten. Without ``source``, the command
-    prefers the current checkout and the standard PSC shared checkout, then
-    shallow-clones the exact Git revision recorded by ``uv add``.
+    prefers the current checkout, the standard PSC shared checkout, and a
+    local path recorded by ``uv add``. If none is complete, it clones the
+    installed VCS source or the configured fork revision.
     """
 
     configured_output = output or os.environ.get("TETRACORDER_CONTAINER")
@@ -241,7 +239,9 @@ def setup_runtime(
         direct_url=direct_url,
     )
     repository_url = repository or direct_url or _DEFAULT_REPOSITORY
-    selected_revision = revision or requested_revision or expected_commit or _DEFAULT_REVISION
+    selected_revision = (
+        revision or requested_revision or expected_commit or _DEFAULT_REVISION
+    )
 
     if dry_run:
         if source_path is not None:

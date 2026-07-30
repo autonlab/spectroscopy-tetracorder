@@ -18,7 +18,20 @@ fi
 
 export APPTAINER_TMPDIR=${APPTAINER_TMPDIR:-/tmp}
 export APPTAINER_CACHEDIR=${APPTAINER_CACHEDIR:-/tmp/tetracorder6-apptainer-cache}
-mkdir -p "$APPTAINER_CACHEDIR"
+mkdir -p "$APPTAINER_TMPDIR" "$APPTAINER_CACHEDIR"
 
 cd "$repo_dir"
-exec apptainer build --fakeroot "$output_image" "$definition"
+source_commit=unknown
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    source_commit=$(git rev-parse HEAD)
+    if [[ -n $(git status --porcelain --untracked-files=no) ]]; then
+        source_commit="${source_commit}-dirty"
+    fi
+fi
+
+rendered_definition=$(mktemp "${APPTAINER_TMPDIR%/}/tetracorder6-def.XXXXXX")
+trap 'rm -f -- "$rendered_definition"' EXIT
+sed "s/TETRACORDER_SOURCE_COMMIT/$source_commit/g" \
+    "$definition" > "$rendered_definition"
+
+apptainer build --fakeroot "$output_image" "$rendered_definition"

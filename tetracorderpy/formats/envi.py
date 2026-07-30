@@ -51,8 +51,7 @@ def _header_and_data_paths(path: str | Path) -> tuple[Path, Path]:
         elif len(existing) > 1:
             names = ", ".join(str(candidate) for candidate in existing)
             raise SpectralDataError(
-                f"ENVI header {header_path} has multiple possible data files: "
-                f"{names}"
+                f"ENVI header {header_path} has multiple possible data files: {names}"
             )
         else:
             data_path = stem_path
@@ -115,11 +114,15 @@ def _parse_envi_fields(text: str) -> dict[str, str]:
             brace_depth = 0
 
     if current_key is not None:
-        raise SpectralDataError(f"unterminated braced value for ENVI field {current_key!r}")
+        raise SpectralDataError(
+            f"unterminated braced value for ENVI field {current_key!r}"
+        )
     return fields
 
 
-def _scalar(fields: Mapping[str, str], key: str, cast: type, default: Any = None) -> Any:
+def _scalar(
+    fields: Mapping[str, str], key: str, cast: type, default: Any = None
+) -> Any:
     raw = fields.get(key)
     if raw is None:
         if default is not None:
@@ -284,9 +287,8 @@ def read_envi(
             "ENVI header has no wavelength list; pass wavelength= explicitly"
         )
 
-    unit = (
-        wavelength_unit
-        or header.fields.get("wavelength units", "um").strip().strip("{}")
+    unit = wavelength_unit or header.fields.get("wavelength units", "um").strip().strip(
+        "{}"
     )
 
     mask: NDArray[np.bool_] | None = None
@@ -436,9 +438,7 @@ class PackedLayout:
         flattened = np.asarray(values).reshape(
             self.lines * self.samples, *trailing_shape
         )
-        return flattened[: self.spectra].reshape(
-            self.sample_shape + trailing_shape
-        )
+        return flattened[: self.spectra].reshape(self.sample_shape + trailing_shape)
 
 
 def _packed_layout(data: SpectralData, max_samples_per_line: int) -> PackedLayout:
@@ -464,6 +464,32 @@ def _packed_layout(data: SpectralData, max_samples_per_line: int) -> PackedLayou
     return PackedLayout(data.sample_shape, lines, samples, data.spectra)
 
 
+def _spectra_slice(
+    values: NDArray[np.generic],
+    start: int,
+    stop: int,
+    sample_shape: tuple[int, ...],
+) -> NDArray[np.generic]:
+    """Select a bounded range without flattening the complete tensor."""
+
+    if not sample_shape:
+        return values[np.newaxis, :]
+    if len(sample_shape) == 1:
+        return values[start:stop, :]
+
+    # Preserve the common image-cube fast path, including non-contiguous
+    # BIL/BSQ memmap views returned by read_envi_array().
+    if len(sample_shape) == 2:
+        samples = sample_shape[1]
+        first_line, first_sample = divmod(start, samples)
+        if first_sample == 0 and stop - start <= samples:
+            return values[first_line, : stop - start, :]
+
+    flat_indices = np.arange(start, stop, dtype=np.intp)
+    coordinates = np.unravel_index(flat_indices, sample_shape)
+    return values[coordinates]
+
+
 def write_packed_envi(
     path: str | Path,
     data: SpectralData,
@@ -475,8 +501,6 @@ def write_packed_envi(
     """Stream an arbitrary spectral tensor into a native float32 BIP cube."""
 
     layout = _packed_layout(data, max_samples_per_line)
-    flat_values = data.values.reshape(data.spectra, data.bands)
-    flat_invalid = data.invalid_mask().reshape(data.spectra, data.bands)
     data_path = Path(path)
     data_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -491,8 +515,16 @@ def write_packed_envi(
             )
             count = stop - start
             if count > 0:
-                line[:count] = np.asarray(flat_values[start:stop], dtype="<f4")
-                line[:count][flat_invalid[start:stop]] = np.float32(deleted_value)
+                target = line[:count]
+                source = _spectra_slice(data.values, start, stop, data.sample_shape)
+                np.copyto(target, source, casting="unsafe")
+                invalid = ~np.isfinite(target)
+                if data.mask is not None:
+                    invalid = np.logical_or(
+                        invalid,
+                        _spectra_slice(data.mask, start, stop, data.sample_shape),
+                    )
+                target[invalid] = np.float32(deleted_value)
             line.tofile(stream)
 
     _write_header(

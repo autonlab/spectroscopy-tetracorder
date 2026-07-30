@@ -5,6 +5,6 @@ from .v600 import Tetracorder600Backend
 
 __all__ = [
     "BackendCapabilities",
-    "TetracorderBackend",
     "Tetracorder600Backend",
+    "TetracorderBackend",
 ]

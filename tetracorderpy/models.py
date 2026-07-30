@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, Mapping
+from typing import Any
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from .errors import ProfileMismatchError, SpectralDataError
-
 
 _WAVELENGTH_FACTORS_TO_UM = {
     "um": 1.0,
@@ -49,7 +49,9 @@ def _normalize_axis(axis: int, ndim: int) -> int:
     try:
         normalized = int(axis)
     except (TypeError, ValueError) as exc:
-        raise SpectralDataError(f"spectral_axis must be an integer, got {axis!r}") from exc
+        raise SpectralDataError(
+            f"spectral_axis must be an integer, got {axis!r}"
+        ) from exc
     if normalized < 0:
         normalized += ndim
     if normalized < 0 or normalized >= ndim:
@@ -164,8 +166,7 @@ class SpectralData:
         normalized_quantity = quantity.strip().lower()
         if normalized_quantity != "reflectance":
             raise SpectralDataError(
-                "Tetracorder analysis currently accepts reflectance, not "
-                f"{quantity!r}"
+                f"Tetracorder analysis currently accepts reflectance, not {quantity!r}"
             )
 
         object.__setattr__(self, "values", array)
@@ -194,7 +195,9 @@ class SpectralData:
     def spectra(self) -> int:
         """Total number of spectra in the tensor."""
 
-        return int(np.prod(self.sample_shape, dtype=np.int64)) if self.sample_shape else 1
+        return (
+            int(np.prod(self.sample_shape, dtype=np.int64)) if self.sample_shape else 1
+        )
 
     def invalid_mask(self) -> NDArray[np.bool_]:
         """Return the explicit mask combined with NaN and infinity detection."""
@@ -288,8 +291,10 @@ class SpectralProfile:
                 f"data wavelengths do not match profile {self.name!r}; "
                 f"maximum difference is {max_error:.6g} um"
             )
-        if self.fwhm is not None and data.fwhm is not None and not np.allclose(
-            data.fwhm, self.fwhm, rtol=0.0, atol=wavelength_atol
+        if (
+            self.fwhm is not None
+            and data.fwhm is not None
+            and not np.allclose(data.fwhm, self.fwhm, rtol=0.0, atol=wavelength_atol)
         ):
             max_error = float(np.max(np.abs(data.fwhm - self.fwhm)))
             raise ProfileMismatchError(
@@ -329,6 +334,9 @@ class AnalysisResult:
     sample_shape: tuple[int, ...]
     profile: SpectralProfile
     backend_version: str
+    dims: tuple[str, ...] | None = None
+    coords: Mapping[str, Any] = field(default_factory=dict)
+    input_metadata: Mapping[str, Any] = field(default_factory=dict)
     provenance: Mapping[str, Any] = field(default_factory=dict)
     artifacts_path: Path | None = None
 
@@ -346,7 +354,13 @@ class AnalysisResult:
                 raise ValueError(
                     f"{name} has shape {array.shape}; expected {expected_shape}"
                 )
+        if self.dims is not None and len(self.dims) != len(expected_shape):
+            raise ValueError(
+                f"dims has {len(self.dims)} entries; expected {len(expected_shape)}"
+            )
         self.materials = MappingProxyType(dict(self.materials))
+        self.coords = MappingProxyType(dict(self.coords))
+        self.input_metadata = MappingProxyType(dict(self.input_metadata))
         self.provenance = MappingProxyType(dict(self.provenance))
 
     @property

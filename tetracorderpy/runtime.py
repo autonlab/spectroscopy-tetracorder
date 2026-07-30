@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 from .errors import BackendUnavailableError
 from .profiles import repository_root
-
 
 TETRACORDER_IMAGE_VERSION = "6.00a5"
 PSC_SHARED_CONTAINER_ROOT = Path(
@@ -57,9 +56,7 @@ def container_candidates() -> tuple[Path, ...]:
     candidates.extend(_images_in(repository_root() / "container"))
     candidates.append(default_shared_container())
     candidates.extend(_images_in(PSC_SHARED_CONTAINER_ROOT))
-    candidates.extend(
-        _images_in(PSC_SHARED_SOURCE_CHECKOUT / "container")
-    )
+    candidates.extend(_images_in(PSC_SHARED_SOURCE_CHECKOUT / "container"))
     return tuple(candidates)
 
 

@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import os
 import tempfile
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 from numpy.typing import ArrayLike
 
@@ -58,9 +60,7 @@ def _coerce_data(
             )
         return data
     if wavelength is None:
-        raise SpectralDataError(
-            "wavelength= is required when analyzing a raw array"
-        )
+        raise SpectralDataError("wavelength= is required when analyzing a raw array")
     return SpectralData(
         data,
         wavelength,
@@ -88,6 +88,27 @@ def _prepare_output_directory(path: str | Path) -> Path:
     return output
 
 
+def _prepare_scratch_directory(path: str | Path) -> Path:
+    scratch = Path(path).expanduser().resolve()
+    if scratch.exists() and not scratch.is_dir():
+        raise NotADirectoryError(f"scratch_dir is not a directory: {scratch}")
+    scratch.mkdir(parents=True, exist_ok=True)
+    return scratch
+
+
+def _finalize_result(
+    result: AnalysisResult,
+    data: SpectralData,
+    *,
+    artifacts_path: Path | None,
+) -> AnalysisResult:
+    result.dims = None if data.dims is None else data.dims[:-1] + ("decision",)
+    result.coords = data.coords
+    result.input_metadata = data.metadata
+    result.artifacts_path = artifacts_path
+    return result
+
+
 def analyze(
     data: SpectralData | ArrayLike,
     *,
@@ -104,6 +125,7 @@ def analyze(
     container: str | Path | None = None,
     runtime: str | Path | None = None,
     output_dir: str | Path | None = None,
+    scratch_dir: str | Path | None = None,
     timeout: float = 300.0,
     backend: TetracorderBackend | None = None,
 ) -> AnalysisResult:
@@ -112,7 +134,9 @@ def analyze(
     Raw arrays may have shape (bands,), (samples, bands), (y, x, bands), or
     arbitrary leading dimensions. The final axis is spectral unless changed
     with spectral_axis. All spectra in one call must share the same wavelength
-    and FWHM arrays.
+    and FWHM arrays. Temporary native files are deleted by default;
+    ``scratch_dir`` chooses their parent. ``output_dir`` instead retains a
+    complete native work tree and must be absent or empty.
     """
 
     spectral_data = _coerce_data(
@@ -126,6 +150,8 @@ def analyze(
         coords=coords,
         metadata=metadata,
     )
+    if output_dir is not None and scratch_dir is not None:
+        raise ValueError("scratch_dir cannot be combined with output_dir")
     resolved_profile = resolve_profile(profile, spectral_data, version=version)
     selected_backend = backend or _make_backend(
         version,
@@ -146,15 +172,28 @@ def analyze(
             work_dir=work_dir,
             timeout=timeout,
         )
-        result.artifacts_path = work_dir
-        return result
+        return _finalize_result(
+            result,
+            spectral_data,
+            artifacts_path=work_dir,
+        )
 
-    with tempfile.TemporaryDirectory(prefix="tetracorderpy-") as temporary:
+    configured_scratch = scratch_dir
+    if configured_scratch is None:
+        configured_scratch = os.environ.get("TETRACORDER_TMPDIR") or None
+    temporary_root = (
+        None
+        if configured_scratch is None
+        else _prepare_scratch_directory(configured_scratch)
+    )
+    with tempfile.TemporaryDirectory(
+        prefix="tetracorderpy-",
+        dir=temporary_root,
+    ) as temporary:
         result = selected_backend.analyze(
             spectral_data,
             resolved_profile,
             work_dir=Path(temporary),
             timeout=timeout,
         )
-    result.artifacts_path = None
-    return result
+    return _finalize_result(result, spectral_data, artifacts_path=None)

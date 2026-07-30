@@ -143,6 +143,55 @@ def test_nonempty_output_dir_is_not_overwritten(
         )
 
 
+def test_input_labels_are_carried_to_the_result(
+    synthetic_spectrum: tuple[np.ndarray, np.ndarray, np.ndarray],
+) -> None:
+    spectrum, wavelength, _ = synthetic_spectrum
+    values = np.broadcast_to(spectrum, (2, spectrum.size)).copy()
+    data = SpectralData(
+        values,
+        wavelength,
+        dims=("sample", "band"),
+        coords={"flight_line": "synthetic-01"},
+        metadata={"processing_level": "made-up reflectance"},
+    )
+
+    result = analyze(
+        data,
+        profile=_profile(wavelength.size),
+        backend=FakeBackend(),
+    )
+
+    assert result.dims == ("sample", "decision")
+    assert result.coords == {"flight_line": "synthetic-01"}
+    assert result.input_metadata == {"processing_level": "made-up reflectance"}
+    with pytest.raises(TypeError):
+        result.coords["flight_line"] = "changed"  # type: ignore[index]
+
+
+def test_temporary_work_can_use_an_explicit_scratch_parent(
+    tmp_path: Path,
+    synthetic_spectrum: tuple[np.ndarray, np.ndarray, np.ndarray],
+) -> None:
+    spectrum, wavelength, _ = synthetic_spectrum
+    backend = FakeBackend()
+    scratch = tmp_path / "job-scratch"
+
+    result = analyze(
+        spectrum,
+        wavelength=wavelength,
+        profile=_profile(wavelength.size),
+        scratch_dir=scratch,
+        backend=backend,
+    )
+
+    assert backend.work_dir is not None
+    assert backend.work_dir.parent == scratch.resolve()
+    assert not backend.work_dir.exists()
+    assert list(scratch.iterdir()) == []
+    assert result.artifacts_path is None
+
+
 def test_spectral_data_metadata_cannot_be_resupplied(
     synthetic_spectrum: tuple[np.ndarray, np.ndarray, np.ndarray],
 ) -> None:
@@ -154,5 +203,22 @@ def test_spectral_data_metadata_cannot_be_resupplied(
             data,
             wavelength=wavelength,
             profile=_profile(wavelength.size),
+            backend=FakeBackend(),
+        )
+
+
+def test_retained_output_and_temporary_scratch_are_mutually_exclusive(
+    tmp_path: Path,
+    synthetic_spectrum: tuple[np.ndarray, np.ndarray, np.ndarray],
+) -> None:
+    spectrum, wavelength, _ = synthetic_spectrum
+
+    with pytest.raises(ValueError, match="cannot be combined"):
+        analyze(
+            spectrum,
+            wavelength=wavelength,
+            profile=_profile(wavelength.size),
+            output_dir=tmp_path / "retained",
+            scratch_dir=tmp_path / "temporary",
             backend=FakeBackend(),
         )

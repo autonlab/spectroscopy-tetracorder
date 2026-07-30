@@ -8,7 +8,6 @@ import pytest
 
 from tetracorderpy import analyze, get_profile
 
-
 pytestmark = pytest.mark.integration
 
 
@@ -24,9 +23,7 @@ def _synthetic_aviris_reflectance(wavelength: np.ndarray) -> np.ndarray:
         (2.20, 0.13, 0.035),
         (2.33, 0.055, 0.030),
     ):
-        reflectance -= depth * np.exp(
-            -0.5 * ((wavelength - center) / width) ** 2
-        )
+        reflectance -= depth * np.exp(-0.5 * ((wavelength - center) / width) ** 2)
     return np.clip(reflectance, 0.02, 0.98).astype(np.float32)
 
 
@@ -34,18 +31,14 @@ def _documented_quickstart_reflectance(wavelength: np.ndarray) -> np.ndarray:
     """Reproduce the exact spectrum published in the documentation."""
 
     wavelength = np.asarray(wavelength, dtype=np.float64)
-    continuum = 0.47 + 0.07 * (
-        (wavelength - wavelength.min()) / np.ptp(wavelength)
-    )
+    continuum = 0.47 + 0.07 * ((wavelength - wavelength.min()) / np.ptp(wavelength))
     reflectance = continuum.copy()
     for center, depth, width in (
         (0.92, 0.11, 0.065),
         (2.20, 0.13, 0.035),
         (2.33, 0.055, 0.030),
     ):
-        reflectance -= depth * np.exp(
-            -0.5 * ((wavelength - center) / width) ** 2
-        )
+        reflectance -= depth * np.exp(-0.5 * ((wavelength - center) / width) ** 2)
     return np.clip(reflectance, 0.02, 0.98).astype(np.float32)
 
 
@@ -142,9 +135,7 @@ def test_documented_quickstart_has_expected_600a5_output() -> None:
         assert result.material_name(material_id) == name
         assert float(result.fit[index]) == pytest.approx(fit, abs=1.0e-6)
         assert float(result.depth[index]) == pytest.approx(depth, abs=1.0e-6)
-        assert float(result.fit_depth[index]) == pytest.approx(
-            fit_depth, abs=1.0e-6
-        )
+        assert float(result.fit_depth[index]) == pytest.approx(fit_depth, abs=1.0e-6)
 
 
 def test_numpy_generated_cube_runs_as_one_native_batch(
@@ -175,5 +166,24 @@ def test_numpy_generated_cube_runs_as_one_native_batch(
     assert result.provenance["native_lines"] == 2
     assert result.provenance["native_samples"] == 3
     assert result.provenance["padded_spectra"] == 0
+    assert result.provenance["container_size_bytes"] > 0
+    assert result.provenance["container_label_version"] == "6.00a5"
     assert np.all(np.isfinite(result.fit))
     assert (output_dir / "runner.log").is_file()
+
+    # Check the two opposite corners independently. This catches packing or
+    # restoration errors while keeping the integration suite reasonably fast.
+    for index in ((0, 0), (1, 2)):
+        single = analyze(
+            cube[index],
+            wavelength=profile.wavelength,
+            fwhm=profile.fwhm,
+            profile=profile,
+            timeout=900.0,
+        )
+        assert single.decisions == result.decisions
+        np.testing.assert_array_equal(result.material_id[index], single.material_id)
+        np.testing.assert_array_equal(result.fit[index], single.fit)
+        np.testing.assert_array_equal(result.depth[index], single.depth)
+        np.testing.assert_array_equal(result.fit_depth[index], single.fit_depth)
+        np.testing.assert_array_equal(result.matched[index], single.matched)

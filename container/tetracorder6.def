@@ -2,11 +2,11 @@ Bootstrap: docker
 From: ubuntu:22.04
 
 %labels
-    Author spectroscopy-tetracorder contributors
     Description USGS Tetracorder 6.00a5, built from Ubuntu source dependencies
     Version 6.00a5
     BuildMethod clean-source-build
-    UpstreamCommit 84f8d7e0
+    UpstreamRepository https://github.com/PSI-edu/spectroscopy-tetracorder
+    SourceCommit TETRACORDER_SOURCE_COMMIT
 
 %files
     specpr /home/src/local/specpr
@@ -36,6 +36,37 @@ From: ubuntu:22.04
     ln -s /home/t1 /t1
     ln -s /home/sl1 /sl1
     ln -s /home/src /src
+
+    # Normalize known defects in the 6.00a5 upstream snapshot inside the
+    # image. Keeping these changes out of the checkout reduces conflicts when
+    # a newer official commit is merged. These are no-ops when already fixed.
+    setup_script=/home/t1/tetracorder.cmds/tetracorder6.00a.cmds/cmd-setup-tetrun
+    sed -i \
+        's@^dogeology=nogeology  \\# default no geologic origins$@dogeology=nogeology  # default no geologic origins@' \
+        "$setup_script"
+    grep -Fqx 'dogeology=nogeology  # default no geologic origins' \
+        "$setup_script"
+
+    expert_setup=/home/t1/tetracorder.cmds/tetracorder6.00a.cmds/cmd.lib.setup.t6.00a5
+    malformed_comments=$(grep -Fxc '|#' "$expert_setup" || true)
+    escaped_comments=$(grep -Fxc '\#' "$expert_setup" || true)
+    sed -i 's@^|#$@\\#@' "$expert_setup"
+    remaining_comments=$(grep -Fxc '|#' "$expert_setup" || true)
+    normalized_comments=$(grep -Fxc '\#' "$expert_setup" || true)
+    if [ "$remaining_comments" -ne 0 ] || \
+       [ "$normalized_comments" -ne "$((escaped_comments + malformed_comments))" ]
+    then
+        echo "could not normalize malformed Tetracorder comment" >&2
+        exit 1
+    fi
+
+    description_dir=/home/sl1/usgs/library06/DESCRIPT/M
+    test -f "$description_dir/mizzonite_bm931-12.html"
+    ln -sfn mizzonite_bm931-12.html \
+        "$description_dir/phrenite+muscovite-BM1931,12.html"
+    test "$(readlink \
+        "$description_dir/phrenite+muscovite-BM1931,12.html")" = \
+        mizzonite_bm931-12.html
 
     export LD_LIBRARY_PATH=/usr/local/lib:/usr/lib/x86_64-linux-gnu
     export LD_RUN_PATH=/usr/local/lib

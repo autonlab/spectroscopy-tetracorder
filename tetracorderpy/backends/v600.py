@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import gzip
+import json
 import re
 import shutil
 import subprocess
+from collections.abc import Iterable
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
-from typing import Iterable
 
 import numpy as np
 from numpy.typing import NDArray
@@ -36,7 +38,6 @@ from ..profiles import profile_deleted_value
 from ..runtime import discover_container
 from .base import BackendCapabilities
 
-
 _PROFILE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.+-]*$")
 _SCALE_LINE = re.compile(
     r"^material=\s*(?P<material>\d+)\s+"
@@ -44,9 +45,7 @@ _SCALE_LINE = re.compile(
     r"(?P<name>.*?)\s+DN=\s*(?P<dn>-?\d+)\s*=\s*"
     r"(?P<physical>[-+0-9.eEdD]+)\s+(?P<status>enable|DISABLE)\s*$"
 )
-_DECISION_ALIAS = re.compile(
-    r"^==\[DIR(?P<kind>[gc])(?P<number>\d+)\](?P<path>\S+)"
-)
+_DECISION_ALIAS = re.compile(r"^==\[DIR(?P<kind>[gc])(?P<number>\d+)\](?P<path>\S+)")
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,6 +89,58 @@ def _discover_runtime(explicit: str | Path | None) -> str:
     raise BackendUnavailableError(
         "neither Apptainer nor Singularity is available on PATH"
     )
+
+
+@lru_cache(maxsize=8)
+def _container_provenance(container: Path, runtime: str) -> dict[str, object]:
+    """Read stable, inexpensive identity fields from a SIF when available."""
+
+    provenance: dict[str, object] = {}
+    try:
+        status = container.stat()
+    except OSError:
+        return provenance
+    provenance["container_size_bytes"] = status.st_size
+    provenance["container_mtime_ns"] = status.st_mtime_ns
+
+    try:
+        completed = subprocess.run(
+            [runtime, "inspect", "--json", str(container)],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=15.0,
+        )
+        payload = json.loads(completed.stdout) if completed.returncode == 0 else {}
+    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError):
+        return provenance
+
+    if not isinstance(payload, dict):
+        return provenance
+    inspect_data = payload.get("data")
+    if not isinstance(inspect_data, dict):
+        return provenance
+    attributes = inspect_data.get("attributes")
+    if not isinstance(attributes, dict):
+        return provenance
+    labels = attributes.get("labels")
+    if not isinstance(labels, dict):
+        return provenance
+
+    selected_labels = {
+        "Version": "container_label_version",
+        "BuildMethod": "container_label_build_method",
+        "SourceCommit": "container_label_source_commit",
+        "UpstreamCommit": "container_label_upstream_commit",
+        "UpstreamRepository": "container_label_upstream_repository",
+        "org.label-schema.build-date": "container_label_build_date",
+        "org.opencontainers.image.base.digest": "container_label_base_digest",
+    }
+    for label, key in selected_labels.items():
+        value = labels.get(label)
+        if isinstance(value, (str, int, float, bool)):
+            provenance[key] = value
+    return provenance
 
 
 def _parse_scale_entries(path: Path) -> tuple[_ScaleEntry, ...]:
@@ -148,9 +199,7 @@ def _candidate_files(
             continue
         keys: list[tuple[str, int]]
         if entry.kind == "group" and entry.decision == 0:
-            keys = [
-                key for key in decision_paths if key[0] == "group" and key[1] > 0
-            ]
+            keys = [key for key in decision_paths if key[0] == "group" and key[1] > 0]
         else:
             keys = [(entry.kind, entry.decision)]
 
@@ -207,13 +256,13 @@ def _compressed_envi_array(
     if header.interleave == "bip":
         values = flat.reshape(header.lines, header.samples, header.bands)
     elif header.interleave == "bil":
-        values = flat.reshape(
-            header.lines, header.bands, header.samples
-        ).transpose(0, 2, 1)
+        values = flat.reshape(header.lines, header.bands, header.samples).transpose(
+            0, 2, 1
+        )
     else:
-        values = flat.reshape(
-            header.bands, header.lines, header.samples
-        ).transpose(1, 2, 0)
+        values = flat.reshape(header.bands, header.lines, header.samples).transpose(
+            1, 2, 0
+        )
     return values, header.data_type
 
 
@@ -227,9 +276,7 @@ def _read_metric(
         if compressed_path.is_file():
             resolved_path = compressed_path
         else:
-            raise TetracorderExecutionError(
-                f"native result raster is missing: {path}"
-            )
+            raise TetracorderExecutionError(f"native result raster is missing: {path}")
 
     if resolved_path.suffix.lower() == ".gz":
         values, data_type = _compressed_envi_array(resolved_path)
@@ -252,9 +299,7 @@ def _decode_results(
     container: Path,
     runtime: str,
 ) -> AnalysisResult:
-    entries = _parse_scale_entries(
-        run_dir / "AAA.info" / "material-DN-scalling.txt"
-    )
+    entries = _parse_scale_entries(run_dir / "AAA.info" / "material-DN-scalling.txt")
     decision_paths = _parse_decision_paths(run_dir / "cmds.start.t6.00a")
     decisions = tuple(
         sorted(
@@ -289,15 +334,11 @@ def _decode_results(
             raise TetracorderExecutionError(
                 f"material {entry.material_id} has an invalid zero DN scale"
             )
-        raw_fit, fit_type = _read_metric(
-            Path(f"{candidate.base_path}.fit"), layout
-        )
+        raw_fit, fit_type = _read_metric(Path(f"{candidate.base_path}.fit"), layout)
         raw_depth, depth_type = _read_metric(
             Path(f"{candidate.base_path}.depth"), layout
         )
-        raw_fd, fd_type = _read_metric(
-            Path(f"{candidate.base_path}.fd"), layout
-        )
+        raw_fd, fd_type = _read_metric(Path(f"{candidate.base_path}.fd"), layout)
         if fit_type not in {1, 2} or depth_type != fit_type or fd_type != fit_type:
             raise TetracorderExecutionError(
                 f"unsupported or inconsistent output data types for {candidate.base_path}"
@@ -354,6 +395,7 @@ def _decode_results(
             "native_samples": layout.samples,
             "input_spectra": layout.spectra,
             "padded_spectra": layout.padded_spectra,
+            **_container_provenance(container, runtime),
         },
     )
 
@@ -476,8 +518,7 @@ EOF
                 if part
             )
             raise TetracorderExecutionError(
-                f"Tetracorder {self.version} exited with status "
-                f"{completed.returncode}",
+                f"Tetracorder {self.version} exited with status {completed.returncode}",
                 log_tail=combined_tail,
             )
 

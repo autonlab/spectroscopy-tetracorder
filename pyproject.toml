@@ -11,11 +11,19 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest>=8.0",
+    "pytest-cov>=7",
 ]
 docs = [
+    "mkdocs-jupyter>=0.25",
     "mkdocs-material>=9.6",
     "mkdocstrings[python]>=0.29",
     "ruff>=0.12",
+]
+notebook = [
+    "ipykernel>=6.30",
+    "matplotlib>=3.10",
+    "nbclient>=0.10",
+    "nbformat>=5.10",
 ]
 
 [build-system]
@@ -28,8 +36,14 @@ packages = ["tetracorderpy"]
 [tool.hatch.build.targets.wheel.force-include]
 "tetracorder.cmds/tetracorder6.00a.cmds/DATASETS" = "tetracorderpy/_data/tetracorder6.00a/DATASETS"
 "tetracorder.cmds/tetracorder6.00a.cmds/restart_files" = "tetracorderpy/_data/tetracorder6.00a/restart_files"
-"sl1/usgs/library06.conv/waves.txt" = "tetracorderpy/_data/tetracorder6.00a/aviris_1995/waves.txt"
-"sl1/usgs/library06.conv/resol.txt" = "tetracorderpy/_data/tetracorder6.00a/aviris_1995/resol.txt"
+"sl1/usgs/library06.conv/waves.txt" = "tetracorderpy/_data/tetracorder6.00a/responses/aviris_1995/wavelength.txt"
+"sl1/usgs/library06.conv/resol.txt" = "tetracorderpy/_data/tetracorder6.00a/responses/aviris_1995/fwhm.txt"
+"sl1/usgs/library06.conv/waves.ascii.files/aviris-classic-2024-waves.txt" = "tetracorderpy/_data/tetracorder6.00a/responses/aviris_2024/wavelength.txt"
+"sl1/usgs/library06.conv/waves.ascii.files/aviris-classic-2024-fwhm.txt" = "tetracorderpy/_data/tetracorder6.00a/responses/aviris_2024/fwhm.txt"
+"sl1/usgs/library06.conv/waves.ascii.files/waves-emit_wl_20220813.txt" = "tetracorderpy/_data/tetracorder6.00a/responses/emit_c/wavelength.txt"
+"sl1/usgs/library06.conv/waves.ascii.files/resol-emit_fwhm_20220813.txt" = "tetracorderpy/_data/tetracorder6.00a/responses/emit_c/fwhm.txt"
+"sl1/usgs/library06.conv/waves.ascii.files/aviris-5-2025_waves.txt" = "tetracorderpy/_data/tetracorder6.00a/responses/aviris5_2025/wavelength.txt"
+"sl1/usgs/library06.conv/waves.ascii.files/aviris-5-2025_fwhm-nm.txt" = "tetracorderpy/_data/tetracorder6.00a/responses/aviris5_2025/fwhm.txt"
 
 [project.scripts]
 tetracorderpy = "tetracorderpy.__main__:main"

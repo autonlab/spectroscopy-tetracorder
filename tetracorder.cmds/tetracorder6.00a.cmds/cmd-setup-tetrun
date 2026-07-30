@@ -179,13 +179,6 @@ cube=$4               # image cube if tetmode= cube
 tfollow=$4            # follow|nofollow if tetmode= singlespectrum
 scalefactor=$5        # factor to scale cube data to I/F
 
-# Single-spectrum mode has no cube DN scale-factor argument.  Keep a
-# meaningful value for diagnostics instead of treating the next option as one.
-if [ "$tetmode" = "singlespectrum" ]
-then
-	scalefactor=1.0
-fi
-
 # set defaults in case the following are not specified.
 
 mintemperature=0
@@ -503,7 +496,7 @@ shift
 
 # cmd-setup-tetrun   sub_dir  data_set  singlespectrum follow|nofollow -T minT maxT Tunit -P minpress maxpres pressure-unit autostart
 
-dogeology=nogeology  # default no geologic origins
+dogeology=nogeology  \# default no geologic origins
 
 while [ -n "$1" ]
 do

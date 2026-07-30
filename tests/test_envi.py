@@ -85,9 +85,7 @@ byte order = 0
     assert values.shape == (1, 1, 1)
     assert values[0, 0, 0] == 173
 
-    values_from_header, header_from_header = read_envi_array(
-        Path(f"{path}.gz.hdr")
-    )
+    values_from_header, header_from_header = read_envi_array(Path(f"{path}.gz.hdr"))
     assert header_from_header.data_path == path
     assert values_from_header[0, 0, 0] == 173
 
@@ -181,6 +179,37 @@ def test_packed_envi_flattens_and_restores_arbitrary_tensors(
         restored.reshape(8, 2),
         native.reshape(9, 2)[:8],
     )
+
+
+def test_packed_envi_streams_noncontiguous_input_without_full_invalid_mask(
+    tmp_path: Path,
+    monkeypatch,
+    synthetic_spectrum: tuple[np.ndarray, np.ndarray, np.ndarray],
+) -> None:
+    spectrum, wavelength, _ = synthetic_spectrum
+    storage = np.broadcast_to(
+        spectrum[:, None, None],
+        (spectrum.size, 2, 3),
+    ).copy()
+    values = storage.transpose(1, 2, 0)
+    assert not values.flags.c_contiguous
+    band_mask = np.zeros(spectrum.size, dtype=bool)
+    band_mask[7] = True
+    data = SpectralData(values, wavelength, mask=band_mask)
+
+    def fail_if_called(_self: SpectralData) -> np.ndarray:
+        raise AssertionError("write_packed_envi allocated the full invalid mask")
+
+    monkeypatch.setattr(SpectralData, "invalid_mask", fail_if_called)
+    path = tmp_path / "streamed"
+
+    layout = write_packed_envi(path, data, max_samples_per_line=3)
+    packed, _ = read_envi_array(path)
+
+    assert (layout.lines, layout.samples) == (2, 3)
+    expected = values.astype(np.float32)
+    expected[:, :, 7] = np.float32(-32767.0)
+    np.testing.assert_array_equal(packed, expected)
 
 
 def test_single_spectrum_becomes_one_pixel_cube(
