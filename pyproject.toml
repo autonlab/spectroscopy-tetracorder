@@ -1,7 +1,7 @@
 [project]
 name = "spectroscopy-tetracorder"
 version = "0.1.0"
-description = "Python wrapper for USGS Tetracorder spectral analysis"
+description = "Python wrapper for Tetracorder 6 spectral analysis"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

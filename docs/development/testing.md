@@ -89,6 +89,21 @@ No npm toolchain is required. MkDocs reads `mkdocs.yml` and Markdown under
 `docs/`; Material supplies the theme, mkdocstrings renders signatures, and
 mkdocs-jupyter renders the saved notebook without rerunning Tetracorder.
 
+## Publish with GitHub Pages
+
+The `.github/workflows/docs.yml` workflow builds pull requests and deploys
+pushes to `main`. It uses a sparse checkout and does not install the project,
+so the multi-gigabyte native and library trees are not materialized merely to
+build the site. The saved notebook is rendered without executing Tetracorder.
+
+After the workflow reaches the fork's default branch, select **GitHub Actions**
+under **Settings → Pages → Build and deployment → Source**. The published
+project site is:
+
+```text
+https://autonlab.github.io/spectroscopy-tetracorder/
+```
+
 ## Build the SIF from source
 
 ```bash

@@ -1,8 +1,10 @@
 site_name: tetracorderpy
 site_description: Unofficial working documentation for a Python interface to Tetracorder 6.00
+site_url: https://autonlab.github.io/spectroscopy-tetracorder/
 repo_name: autonlab/spectroscopy-tetracorder
 repo_url: https://github.com/autonlab/spectroscopy-tetracorder
-edit_uri: edit/fanurs/a-more-standalone-example/docs/
+edit_uri: edit/main/docs/
+copyright: Unofficial fork documentation; no upstream or agency endorsement.
 
 theme:
   name: material
@@ -121,3 +123,4 @@ nav:
   - Project:
       - Upstream sync & deployment: development/upstream-sync.md
       - Testing & documentation: development/testing.md
+      - License & disclaimer: development/license-and-disclaimer.md

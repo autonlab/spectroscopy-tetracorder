@@ -29,6 +29,8 @@ hide:
     PSC workflow. We are not the authors of Tetracorder or of the original
     repository. The [upstream repository](https://github.com/PSI-edu/spectroscopy-tetracorder)
     and its README and tutorials remain the original project documentation.
+    No affiliation or endorsement is implied. See the
+    [license and disclaimer](development/license-and-disclaimer.md).
 
 <div class="tc-statbar">
   <div class="tc-stat"><strong>1 → N dimensions</strong><span>Spectrum, batch, cube, or tensor</span></div>
@@ -39,7 +41,7 @@ hide:
 ## A thin Python layer, not a new classifier
 
 `tetracorderpy` does not reimplement Tetracorder's expert system. It gives the
-existing USGS Tetracorder 6.00a5 workflow a format-independent Python boundary:
+existing Tetracorder 6.00a5 workflow a format-independent Python boundary:
 
 <div class="tc-flow">
   <div><strong>Reflectance tensor</strong><small>NumPy-like values and metadata</small></div>

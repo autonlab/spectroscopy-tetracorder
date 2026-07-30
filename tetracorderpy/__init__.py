@@ -1,4 +1,4 @@
-"""Python-native interface to USGS Tetracorder."""
+"""Python-native interface to Tetracorder 6."""
 
 from .api import analyze
 from .errors import (
