@@ -1,6 +1,6 @@
 site_name: tetracorderpy
 site_description: Unofficial working documentation for a Python interface to Tetracorder 6.00
-site_url: https://autonlab.github.io/spectroscopy-tetracorder/
+site_url: https://autonlab.org/spectroscopy-tetracorder/
 repo_name: autonlab/spectroscopy-tetracorder
 repo_url: https://github.com/autonlab/spectroscopy-tetracorder
 edit_uri: edit/main/docs/
@@ -9,13 +9,9 @@ copyright: Unofficial fork documentation; no upstream or agency endorsement.
 theme:
   name: material
   language: en
-  logo: assets/logo.svg
-  favicon: assets/logo.svg
   icon:
     repo: fontawesome/brands/github
   features:
-    - navigation.tabs
-    - navigation.tabs.sticky
     - navigation.sections
     - navigation.indexes
     - navigation.path
@@ -95,32 +91,31 @@ extra_javascript:
   - javascripts/spectrum-plot.js
 
 nav:
-  - Home: index.md
-  - Start:
+  - Getting Started:
+      - Overview: index.md
       - Installation on PSC: getting-started/installation.md
       - First analysis: getting-started/quickstart.md
       - Executed Python tutorial: tutorials/python-api-tutorial.ipynb
-  - Learn:
+  - Core Concepts:
       - Hyperspectral data: concepts/hyperspectral-data.md
       - Sampling & sensor profiles: concepts/sampling-and-profiles.md
       - Libraries & matching: concepts/libraries-and-matching.md
-      - Native modes & parameters: concepts/native-modes.md
-  - Data formats:
-      - PSC shared examples: data/psc-shared-datasets.md
-      - AVIRIS: data/aviris.md
-      - ENVI: data/envi.md
-  - User guide:
-      - Tensors & metadata: guides/tensors.md
-      - Large cubes & memory: guides/large-cubes.md
+  - User Guide:
+      - Input tensors & metadata: guides/tensors.md
+      - Reading and writing ENVI: data/envi.md
+      - Working with AVIRIS: data/aviris.md
+      - PSC example datasets: data/psc-shared-datasets.md
+      - Cubes larger than memory: guides/large-cubes.md
       - Results & artifacts: guides/results.md
       - Runtime & containers: guides/runtime.md
-  - API:
-      - API map: reference/index.md
+      - Native execution parameters: concepts/native-modes.md
+  - API Reference:
+      - Overview: reference/index.md
       - Analysis & models: reference/analysis.md
       - Profiles: reference/profiles.md
       - ENVI adapter: reference/formats.md
       - Errors: reference/errors.md
-  - Project:
-      - Upstream sync & deployment: development/upstream-sync.md
+  - Maintainer Notes:
+      - Maintaining the fork: development/upstream-sync.md
       - Testing & documentation: development/testing.md
       - License & disclaimer: development/license-and-disclaimer.md

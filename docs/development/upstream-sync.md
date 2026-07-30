@@ -1,98 +1,129 @@
-# Upstream sync & PSC deployment
+# Maintaining the fork and shared deployment
 
-This fork is a small Python/container overlay on a much larger scientific
-repository. Keep upstream synchronization separate from PSC deployment:
+This page is for maintainers, not routine wrapper users. It separates source
+development, upstream synchronization, and deployment on the Pittsburgh
+Supercomputing Center (**PSC**).
 
-- `upstream` is `PSI-edu/spectroscopy-tetracorder`, the original project;
-- `origin` is the `autonlab` fork used to publish this branch;
-- a personal checkout is the only development workspace; and
-- `/ocean/projects/cis250251p/shared/repos/spectroscopy-tetracorder` is a
-  pull-only, group-readable deployment checkout.
+## Repository roles
+
+| Location or remote | Role | Policy |
+|---|---|---|
+| `/ocean/projects/cis250251p/<username>/spectroscopy-tetracorder` | personal development checkout | edit, test, commit, and push here |
+| `origin` | `autonlab/spectroscopy-tetracorder` fork | maintained `main` branch |
+| `upstream` | `PSI-edu/spectroscopy-tetracorder` | authoritative original project |
+| `/ocean/projects/cis250251p/shared/repos/spectroscopy-tetracorder` | group-readable installation source | pull-only checkout of fork `main` |
+| `/ocean/projects/cis250251p/shared/containers/tetracorder/6.00a5/` | native runtime deployment | versioned, tested SIF |
+
+Do not develop in the shared checkout. It should contain no local commits or
+uncommitted changes.
 
 ## Ownership boundary
 
-Treat `specpr/`, `tetracorder6.00/`, `tetracorder.cmds/`, `sl1/`, the original
-README/history, and inherited examples as upstream or pre-existing content.
-Prefer the incoming upstream bytes during a merge unless a scientifically
+Treat `specpr/`, `tetracorder6.00/`, `tetracorder.cmds/`, `sl1/`, the
+original README and history, and inherited examples as upstream or
+pre-existing content. Prefer incoming upstream bytes unless a scientifically
 reviewed native change is genuinely required.
 
-The maintained overlay is concentrated in `tetracorderpy/`, `tests/`, `docs/`,
-`pyproject.toml`, `mkdocs.yml`, and the Tetracorder 6 container definition and
-build script. Known defects in the current 6.00a5 command snapshot are
-normalized inside a newly built SIF or an isolated per-run command copy. This
-keeps corrective edits out of the official command/library trees and reduces
-future conflicts.
+The maintained overlay is concentrated in `tetracorderpy/`, `tests/`,
+`docs/`, `pyproject.toml`, `mkdocs.yml`, and the Tetracorder 6 container
+definition and build script. When possible, adapt to upstream changes through
+profiles, the container build, or copied per-run command files rather than
+editing official command and library trees.
 
-The legacy files already present on the fork's main branch are retained as
-history. They are not evidence of Python support for Tetracorder 5.27; the
-wrapper and its tests support only 6.00.
+The wrapper and its tests support Tetracorder 6.00. Legacy 5.x files retained
+in repository history do not imply Python support for those versions.
 
-## Merge a new official commit
+## Synchronize a new upstream commit
 
-Start in a clean personal checkout:
+Begin on a clean personal `main`:
 
 ```bash
 git status --short
-git fetch --prune upstream origin
-git switch fanurs/a-more-standalone-example
+git switch main
+git pull --ff-only origin main
+git fetch --prune upstream
 git merge upstream/main
 ```
 
-Inspect every conflict rather than choosing one side repository-wide:
+Inspect every conflict rather than selecting one side repository-wide:
 
 ```bash
 git diff --name-only --diff-filter=U
 git diff upstream/main -- specpr tetracorder6.00 tetracorder.cmds sl1
 ```
 
-For native trees, first ask whether the wrapper can adapt through profiles,
-the container build, or a copied run file. Keep wrapper code version-specific
-and fail clearly when an upstream layout or preset no longer satisfies its
-contract.
+For native trees, first ask whether the wrapper can absorb the new layout
+without modifying upstream-owned data. Keep version-specific assumptions
+explicit and fail clearly when a supported profile or command layout no longer
+satisfies its contract.
 
 ## Validate the overlay
 
-Run the Python, notebook, and site checks:
+Synchronize the development, documentation, and notebook groups:
 
 ```bash
 uv sync --group dev --group docs --group notebook
+```
+
+Run the fast suite and render the site:
+
+```bash
 uv run pytest
 uv run --group docs mkdocs build --strict
+```
+
+Then exercise the existing SIF:
+
+```bash
 TETRACORDER_RUN_INTEGRATION=1 uv run pytest -m integration
 ```
 
-The integration suite uses an existing SIF; it does not rebuild one. If the
-official commit changes compiled source, expert-system commands, or embedded
-libraries, the old SIF cannot validate those new native bytes. Build a new
-candidate from scratch at a distinct path, then run `apptainer test` and the
-full integration suite against it. Do not overwrite or silently repoint the
-known-good shared image while evaluating a candidate.
+The integration suite uses an existing SIF; it does not rebuild one. If an
+upstream commit changes compiled source, expert-system commands, or embedded
+libraries, build a new candidate from scratch at a distinct path. Run
+`apptainer test` and the full integration suite against the candidate before
+promoting it.
 
-## Publish, then deploy
+## Publish main
 
-After review and validation, publish the development branch:
-
-```bash
-git push origin fanurs/a-more-standalone-example
-```
-
-Only then fast-forward the group checkout:
+After review and validation:
 
 ```bash
-git -C /ocean/projects/cis250251p/shared/repos/spectroscopy-tetracorder status --short
-git -C /ocean/projects/cis250251p/shared/repos/spectroscopy-tetracorder fetch origin
-git -C /ocean/projects/cis250251p/shared/repos/spectroscopy-tetracorder switch fanurs/a-more-standalone-example
-git -C /ocean/projects/cis250251p/shared/repos/spectroscopy-tetracorder pull --ff-only origin fanurs/a-more-standalone-example
+git push origin main
 ```
 
-The first command must be empty. Stop if the shared checkout has local changes
-or cannot fast-forward; do not repair it by force. Existing consumer projects
-can rebuild their installed wheel from the advanced shared path with:
+Direct writes to fork `main` are the current local policy. If branch
+protection or a review policy is introduced later, use a short-lived branch
+and pull request instead.
+
+## Update the shared checkout
+
+Only after the fork has the validated commit:
+
+```bash
+git -C /ocean/projects/cis250251p/shared/repos/spectroscopy-tetracorder \
+  status --short
+
+git -C /ocean/projects/cis250251p/shared/repos/spectroscopy-tetracorder \
+  fetch origin
+
+git -C /ocean/projects/cis250251p/shared/repos/spectroscopy-tetracorder \
+  switch main
+
+git -C /ocean/projects/cis250251p/shared/repos/spectroscopy-tetracorder \
+  pull --ff-only origin main
+```
+
+The status output must be empty. Stop if the shared checkout has local changes
+or cannot fast-forward; do not discard or force-rewrite unexplained work.
+
+Existing consumer projects can rebuild their installed wheel from the updated
+shared path with:
 
 ```bash
 uv sync --reinstall-package spectroscopy-tetracorder
 ```
 
-Promoting a new SIF is a separate operation: preserve the versioned candidate,
-verify its labels and integration outputs, and update the stable shared link
-only after that review.
+Promoting a SIF is a separate operation. Preserve the previous versioned image,
+verify the candidate's labels and integration outputs, and change the stable
+shared runtime only after that review.

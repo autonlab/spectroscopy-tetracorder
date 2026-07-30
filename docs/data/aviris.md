@@ -5,8 +5,9 @@ instrument for learning the wrapper because this repository contains a
 complete, runnable 1995 configuration.
 
 AVIRIS names a sensor family, not one file format or one immutable spectral
-response. The PSC examples include AVIRIS Classic 2024 in ENVI BIL, AVIRIS-3
-L2A in NetCDF, and a reduced 188-band Cuprite ENVI benchmark. See
+response. The Pittsburgh Supercomputing Center (PSC) examples include AVIRIS
+Classic 2024 in ENVI BIL, AVIRIS-3 L2A in NetCDF, and a reduced 188-band
+Cuprite ENVI benchmark. See
 [PSC shared dataset examples](psc-shared-datasets.md) for their concrete
 schemas and current compatibility.
 

@@ -66,9 +66,10 @@ contains many additional fields. The current adapter preserves all raw fields
 under `data.metadata["header"]`, but it does not yet turn map projection or
 geolocation fields into typed Python coordinates.
 
-Real headers can omit scientifically important metadata. The PSC AVIRIS
-Classic 2024 example lists wavelengths numerically in nanometers without a
-`wavelength units` field and stores `-9999` edge pixels without a
+Real headers can omit scientifically important metadata. The Pittsburgh
+Supercomputing Center (PSC) AVIRIS Classic 2024 example lists wavelengths
+numerically in nanometers without a `wavelength units` field and stores
+`-9999` edge pixels without a
 `data ignore value`. The reader cannot safely guess either fact; pass the unit
 and construct a bounded mask explicitly. See
 [PSC shared dataset examples](psc-shared-datasets.md#aviris-classic-2024-envi-pair).

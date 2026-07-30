@@ -1,7 +1,8 @@
 # Testing & documentation
 
 The test suite separates fast Python behavior from opt-in tests that execute
-the real Tetracorder image.
+the real Tetracorder image. On the Pittsburgh Supercomputing Center (PSC), the
+integration suite discovers the shared image automatically.
 
 ## Test groups
 
@@ -101,7 +102,7 @@ under **Settings → Pages → Build and deployment → Source**. The published
 project site is:
 
 ```text
-https://autonlab.github.io/spectroscopy-tetracorder/
+https://autonlab.org/spectroscopy-tetracorder/
 ```
 
 ## Build the SIF from source

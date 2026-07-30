@@ -1,109 +1,143 @@
----
-hide:
-  - navigation
-  - toc
----
+# Getting Started
 
-<div class="tc-hero">
-  <div class="tc-hero__copy">
-    <div class="tc-eyebrow">Python interface · Tetracorder 6.00</div>
-    <h1>Material mapping from <span class="tc-gradient-text">spectral tensors.</span></h1>
-    <p class="tc-lead">
-      Give Python reflectance values, wavelength coordinates, and a matching
-      sensor profile. The wrapper handles the native cube workflow, container,
-      temporary files, and result decoding.
-    </p>
-    <div class="tc-actions">
-      <a class="tc-button tc-button--primary" href="getting-started/quickstart/">Run a first spectrum</a>
-      <a class="tc-button" href="concepts/hyperspectral-data/">Learn the concepts</a>
-    </div>
-  </div>
-  <div class="tc-hero__art">
-    <img src="assets/hero-spectrum.svg" alt="A spectral image cube connected to a reflectance curve">
-  </div>
-</div>
+`tetracorderpy` is an **unofficial** Python interface to the existing
+Tetracorder 6 expert system. It accepts reflectance arrays and their spectral
+coordinates, runs the native cube workflow in an Apptainer or Singularity
+container, and returns aligned NumPy result arrays.
 
-!!! info "About this documentation"
+These instructions are written for the Pittsburgh Supercomputing Center
+(**PSC**) allocation used by this project.
 
-    These are unofficial working notes added in our fork for our Python and
-    PSC workflow. We are not the authors of Tetracorder or of the original
-    repository. The [upstream repository](https://github.com/PSI-edu/spectroscopy-tetracorder)
-    and its README and tutorials remain the original project documentation.
-    No affiliation or endorsement is implied. See the
+!!! note "Unofficial interface and documentation"
+
+    This fork and website are not the official Tetracorder project, and the
+    fork maintainers do not claim authorship of Tetracorder, Specpr, its expert
+    systems, or its spectral libraries. The
+    [upstream repository](https://github.com/PSI-edu/spectroscopy-tetracorder)
+    remains authoritative. See the
     [license and disclaimer](development/license-and-disclaimer.md).
 
-<div class="tc-statbar">
-  <div class="tc-stat"><strong>1 → N dimensions</strong><span>Spectrum, batch, cube, or tensor</span></div>
-  <div class="tc-stat"><strong>1 native run</strong><span>All spectra in one call</span></div>
-  <div class="tc-stat"><strong>0 raw files</strong><span>Kept by default after decoding</span></div>
-</div>
+## What the wrapper does
 
-## A thin Python layer, not a new classifier
+| You provide | The wrapper handles | You receive |
+|---|---|---|
+| reflectance values | temporary native ENVI input | material identifiers |
+| wavelength centers and, when available, FWHM | container discovery and one native cube run | fit, depth, and fit-depth arrays |
+| a matching sensor profile | native file parsing and cleanup | decision metadata and provenance |
 
-`tetracorderpy` does not reimplement Tetracorder's expert system. It gives the
-existing Tetracorder 6.00a5 workflow a format-independent Python boundary:
+A one-dimensional spectrum, a batch, and a spatial cube all use the same
+`analyze()` function. All spectra in one call are sent through one native
+batch run; the wrapper does not launch one process per pixel.
 
-<div class="tc-flow">
-  <div><strong>Reflectance tensor</strong><small>NumPy-like values and metadata</small></div>
-  <div><strong>Sensor profile</strong><small>Sampling plus native dataset preset</small></div>
-  <div><strong>Tetracorder cube run</strong><small>One Apptainer/Singularity process</small></div>
-  <div><strong>Result tensors</strong><small>Materials, fit, depth, and decisions</small></div>
-</div>
+## Before you begin
 
-The abstraction stays Pythonic, while the scientific decisions remain those of
-the selected native expert system and its convolved reference libraries.
+You need:
 
-## What you can pass
+- access to the project allocation on PSC;
+- Python 3.12 or later and `uv` in your own project;
+- `apptainer` or `singularity` on `PATH`; and
+- reflectance data whose wavelength sampling matches a supported
+  [sensor profile](concepts/sampling-and-profiles.md).
 
-<div class="grid cards" markdown>
+## 1. Install the package
 
--   :material-chart-bell-curve-cumulative:{ .lg .middle } **One spectrum**
+From the Python project that will call Tetracorder:
 
-    ---
+```bash
+cd /ocean/projects/cis250251p/<username>/<your-project>
+uv add /ocean/projects/cis250251p/shared/repos/spectroscopy-tetracorder
+```
 
-    A `(bands,)` reflectance vector becomes one native cube pixel. Results have
-    shape `(decisions,)`.
+The package is installed into your project's uv environment. The large
+Tetracorder image and spectral libraries remain in shared storage.
 
-    [:octicons-arrow-right-24: Quick start](getting-started/quickstart.md)
+See [Installation on PSC](getting-started/installation.md) for the runtime
+layout, overrides, and recovery setup command.
 
--   :material-view-grid-outline:{ .lg .middle } **A batch or image cube**
+## 2. Check the shared runtime
 
-    ---
+```bash
+uv run tetracorderpy setup --dry-run
+```
 
-    Use `(n, bands)`, `(y, x, bands)`, or arbitrary leading dimensions. The
-    wrapper preserves the leading sample shape.
+The normal result on this allocation is:
 
-    [:octicons-arrow-right-24: Tensor semantics](guides/tensors.md)
+```text
+Would reuse existing image: /ocean/projects/cis250251p/shared/containers/tetracorder/6.00a5/tetracorder-6.00a5.sif
+```
 
--   :material-file-table-outline:{ .lg .middle } **An ENVI raster**
+This command does not rebuild the image. It only reports which existing image
+would be used.
 
-    ---
+## 3. Analyze a spectrum
 
-    Read BIP, BIL, or BSQ data and common wavelength, FWHM, bad-band, scale,
-    and deleted-value fields.
+```python
+import numpy as np
 
-    [:octicons-arrow-right-24: ENVI adapter](data/envi.md)
+from tetracorderpy import analyze, get_profile
 
--   :material-server-security:{ .lg .middle } **PSC's shared runtime**
+profile = get_profile("aviris_1995")
+wavelength = profile.wavelength
+assert wavelength is not None
 
-    ---
+continuum = 0.46 + 0.05 * (
+    (wavelength - wavelength.min()) / np.ptp(wavelength)
+)
+reflectance = continuum - 0.12 * np.exp(
+    -0.5 * ((wavelength - 2.20) / 0.035) ** 2
+)
+reflectance = np.clip(reflectance, 0.02, 0.98).astype(np.float32)
 
-    Install the Python package from Git and discover the shared SIF
-    automatically. Build only when the shared image is unavailable.
+result = analyze(
+    reflectance,
+    wavelength=wavelength,
+    fwhm=profile.fwhm,
+    profile=profile,
+)
 
-    [:octicons-arrow-right-24: Installation](getting-started/installation.md)
+print(result.shape)
+print(result.backend_version)
+```
 
-</div>
+Expected structural output with the shared 6.00a5 image:
 
-## The important scientific boundary
+```text
+(45,)
+6.00
+```
 
-!!! warning "A wavelength vector is necessary, but not sufficient"
+The exact material matches depend on the input curve. Read
+[First analysis](getting-started/quickstart.md) for a complete executed example
+with expected match rows and an interactive spectrum plot.
 
-    Tetracorder compares observations with reference spectra prepared for a
-    particular instrument response. An arbitrary set of wavelength centers does
-    not become scientifically supported merely because it fits in a NumPy
-    array. The data must match a Tetracorder dataset preset and the corresponding
-    convolved libraries.
+!!! warning "A successful run is not a validated identification"
 
-Start with [sampling and sensor profiles](concepts/sampling-and-profiles.md) if
-you are bringing data from a new instrument.
+    Synthetic examples test installation, array packing, native execution, and
+    result decoding. Scientific use still requires suitable calibration,
+    compatible sampling, an appropriate reference library, and domain review.
+
+## Where to go next
+
+| Goal | Section |
+|---|---|
+| Understand spectra, wavelength sampling, and reference matching | [Core Concepts](concepts/hyperspectral-data.md) |
+| Pass arrays, masks, cubes, and metadata | [Input tensors & metadata](guides/tensors.md) |
+| Read ENVI or work with AVIRIS and shared example data | [Reading and writing ENVI](data/envi.md) |
+| Process a scene that is larger than memory | [Cubes larger than memory](guides/large-cubes.md) |
+| Interpret returned arrays and optional native artifacts | [Results & artifacts](guides/results.md) |
+| Look up exact functions and signatures | [API Reference](reference/index.md) |
+| Synchronize upstream or deploy the shared checkout | [Maintainer Notes](development/upstream-sync.md) |
+
+The **Core Concepts** section explains scientific meaning. The **User Guide**
+is task-oriented. **API Reference** documents exact Python objects and
+signatures. Normal users do not need the **Maintainer Notes** section.
+
+## One important scientific constraint
+
+A wavelength vector is necessary but not sufficient. Tetracorder compares an
+observation with reference spectra prepared for a particular instrument
+response. The band centers, FWHM values, preprocessing, native dataset preset,
+and convolved library must describe the data you are actually analyzing.
+
+If you are bringing a new instrument or product generation, begin with
+[Sampling & sensor profiles](concepts/sampling-and-profiles.md).

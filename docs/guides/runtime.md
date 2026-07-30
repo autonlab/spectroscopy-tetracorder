@@ -4,6 +4,9 @@ Each `analyze()` call is a one-shot native workflow. Python prepares an ENVI
 cube, launches Tetracorder inside Apptainer/Singularity, decodes the maps, and
 returns. There is no persistent Tetracorder server.
 
+The shared deployment documented here runs at the Pittsburgh Supercomputing
+Center (**PSC**).
+
 ## Process boundary
 
 ```text

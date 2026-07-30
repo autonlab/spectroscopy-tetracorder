@@ -1,6 +1,7 @@
 # PSC shared dataset examples
 
-The shared directory on PSC is a useful format laboratory:
+The shared directory at the Pittsburgh Supercomputing Center (**PSC**) is a
+useful format laboratory:
 
 ```text
 /ocean/projects/cis250251p/shared/datasets/hyperspectral-datasets
