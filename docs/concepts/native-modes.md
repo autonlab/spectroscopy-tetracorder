@@ -303,8 +303,8 @@ native command.
 - The original project is the
   [PSI-edu spectroscopy-tetracorder repository](https://github.com/PSI-edu/spectroscopy-tetracorder).
 - The setup grammar described here is implemented in the fork's
-  [`cmd-setup-tetrun`](https://github.com/autonlab/spectroscopy-tetracorder/blob/fanurs/a-more-standalone-example/tetracorder.cmds/tetracorder6.00a.cmds/cmd-setup-tetrun).
+  [`cmd-setup-tetrun`](https://github.com/autonlab/spectroscopy-tetracorder/blob/main/tetracorder.cmds/tetracorder6.00a.cmds/cmd-setup-tetrun).
 - Python command assembly is in
-  [`tetracorderpy/backends/v600.py`](https://github.com/autonlab/spectroscopy-tetracorder/blob/fanurs/a-more-standalone-example/tetracorderpy/backends/v600.py).
+  [`tetracorderpy/backends/v600.py`](https://github.com/autonlab/spectroscopy-tetracorder/blob/main/tetracorderpy/backends/v600.py).
 - Public arguments and temporary-directory behavior are in
-  [`tetracorderpy/api.py`](https://github.com/autonlab/spectroscopy-tetracorder/blob/fanurs/a-more-standalone-example/tetracorderpy/api.py).
+  [`tetracorderpy/api.py`](https://github.com/autonlab/spectroscopy-tetracorder/blob/main/tetracorderpy/api.py).
