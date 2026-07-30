@@ -57,14 +57,18 @@ the Tetracorder command language, SPECPR records, or its working-file layout.
 
 The wrapper requires Python 3.12+,
 [uv](https://docs.astral.sh/uv/), Apptainer or Singularity, and a
-Tetracorder 6.00 image. On PSC, add the current fork branch directly to a uv
-project:
+Tetracorder 6.00 image. On PSC, install the package from the group-readable
+deployment checkout:
 
 ```bash
-uv add 'spectroscopy-tetracorder @ git+https://github.com/autonlab/spectroscopy-tetracorder.git@fanurs/a-more-standalone-example'
+uv add /ocean/projects/cis250251p/shared/repos/spectroscopy-tetracorder
 ```
 
-The wheel contains the Python package and about 600 KB of sensor-profile
+The absolute path is intentional for this PSC allocation. uv builds a normal,
+non-editable wheel in the consumer project. The shared checkout is a pull-only
+deployment mirror; development and commits happen in a personal checkout and
+are pushed to the GitHub fork before a maintainer fast-forwards the shared
+copy. The wheel contains the Python package and compact sensor-profile
 metadata, not the SIF or the multi-gigabyte spectral-library tree. It
 automatically discovers the project image at:
 
@@ -82,10 +86,10 @@ If no usable shared image exists, provisioning is an explicit second step:
 uv run tetracorderpy setup
 ```
 
-The setup command never overwrites an image. It prefers a compatible source
-checkout already on PSC and otherwise shallow-clones the Git revision recorded
-by `uv add`, performs the clean source build, and runs the image's embedded
-test. Inspect its decision without cloning or building with:
+The setup command never overwrites an image. It prefers a compatible installed
+or shared source checkout, performs a clean source build only when no image is
+available, records the source commit in new image labels, and runs the image's
+embedded test. Inspect its decision without cloning or building with:
 
 ```bash
 uv run tetracorderpy setup --dry-run
@@ -94,7 +98,7 @@ uv run tetracorderpy setup --dry-run
 Developers working in a source checkout can install and build directly:
 
 ```bash
-uv sync --group dev
+uv sync --group dev --group docs --group notebook
 ./container/build-tetracorder6.sh
 ```
 
@@ -107,14 +111,21 @@ At runtime, the wrapper searches for `apptainer` or `singularity` on `PATH`.
 
 The modern documentation site includes installation, hyperspectral concepts,
 sampling and sensor-profile constraints, AVIRIS and ENVI guides, large-cube
-memory guidance, results, runtime behavior, generated API reference, and test
-documentation. Build or preview it entirely through uv; Node/npm is not
-required:
+memory guidance, results, runtime behavior, generated API reference, test
+documentation, and an [executed Jupyter tutorial](docs/tutorials/python-api-tutorial.ipynb)
+with saved plots and real 6.00a5 outputs. Build or preview it entirely through
+uv; Node/npm is not required:
 
 ```bash
 uv sync --group docs
 uv run --group docs mkdocs serve
 uv run --group docs mkdocs build --strict
+```
+
+Re-execute the saved notebook with:
+
+```bash
+uv run --group notebook jupyter execute docs/tutorials/python-api-tutorial.ipynb --inplace --timeout=1200
 ```
 
 ## NumPy quick start
@@ -197,15 +208,18 @@ masked cells become native deleted values.
 
 `SpectralProfile` is separate from the array and from its disk format. It
 identifies the sensor response and the matching Tetracorder dataset preset.
-`get_profile("aviris_1995")` includes the exact 224-band upstream wavelength
-and FWHM arrays. `available_profiles()` lists the other bundled presets.
+Exact wavelength and FWHM arrays are packaged for `aviris_1995`,
+`aviris_2024`, `emit_c`, and `aviris5_2025`; other bundled native presets are
+explicitly labeled as band-count-only validation. The two AVIRIS presets share
+the same wavelength grid but select different restart configurations, so
+automatic profile resolution refuses to guess between them.
 
 A wavelength array alone is not enough to make an arbitrary instrument
 compatible: Tetracorder also needs reference libraries convolved to that
 sensor response and a matching dataset preset. Advanced users can construct
 a `SpectralProfile` with a custom `backend_profile` after adding those native
-resources. The public `version=` and backend seam leave room for later
-Tetracorder versions; only version 6.00 is implemented today.
+resources. The backend seam leaves room for later work, but only Tetracorder
+6.00 is supported; 5.27 is not exposed or routed through the Python API.
 
 ## ENVI and other file formats
 
@@ -244,9 +258,16 @@ Each compact result array has shape `input_sample_shape + (decisions,)`:
 | `decisions` | metadata for each group/case on the final axis |
 | `materials` | material-ID-to-name catalog |
 | `provenance` | backend, native layout, and runtime details |
+| `dims`, `coords` | caller labels aligned to the returned decision tensor |
+| `input_metadata` | caller metadata carried from `SpectralData` |
 
-By default, a temporary working directory is deleted after decoding. To keep
-the full native Tetracorder maps and logs, pass a new or empty directory:
+By default, a temporary working directory is deleted after decoding. Put that
+ephemeral work on job-local scratch with `scratch_dir=` or
+`TETRACORDER_TMPDIR`; this does not retain native files. Temporary input
+packing is line-bounded rather than allocating a full-cube invalid mask.
+
+To keep the full native Tetracorder maps and logs, pass a new or empty
+directory:
 
 ```python
 result = analyze(
@@ -263,8 +284,9 @@ The nonempty-directory check prevents accidental overwrites.
 
 ## Tests
 
-The default suite uses only fully synthetic spectra and skips the container
-integration test:
+The default suite validates the Python layer and the saved executed notebook.
+Opt-in integration tests run synthetic spectra through the actual container,
+including native batch-versus-single equivalence:
 
 ```bash
 uv run pytest

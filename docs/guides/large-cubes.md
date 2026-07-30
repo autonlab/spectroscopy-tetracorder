@@ -15,8 +15,8 @@ time.
 
 During analysis, the current implementation may allocate:
 
-- a Boolean invalid mask with the same shape as the input cube;
-- one float32 line buffer while writing the packed native cube;
+- one float32 line buffer and one line-sized Boolean validity buffer while
+  writing the packed native cube;
 - Tetracorder's native working rasters on disk;
 - decompressed native metric rasters during decoding; and
 - five final result tensors over `sample_shape + (decisions,)`.
@@ -38,9 +38,10 @@ scratch storage.
 
 !!! warning "Memory-mapped input is not end-to-end lazy execution"
 
-    Passing a memmap prevents an unconditional full input read at construction,
-    but `invalid_mask()` and result decoding still materialize data. There is
-    no built-in Dask graph, result iterator, or `chunks=` parameter yet.
+    Passing a compatible memmap and writing the temporary cube are line-bounded,
+    including validity checks. Native result decoding still materializes output
+    tensors. There is no built-in Dask graph, result iterator, or `chunks=`
+    parameter yet.
 
 ## A bounded line-chunk pattern
 
@@ -82,7 +83,11 @@ for start in range(0, lines, block_lines):
         dims=("y", "x", "band"),
         metadata={"line_range": (start, stop)},
     )
-    result = analyze(block, profile=profile)
+    result = analyze(
+        block,
+        profile=profile,
+        scratch_dir="/path/to/job-scratch",
+    )
 
     variables = {
         "material_id": result.material_id,
@@ -134,10 +139,11 @@ chunking, retries, output assembly, and resource requests.
 
 Measure on a representative subset. Account for:
 
-1. `pixels × bands` for input and invalid-mask work;
+1. `pixels × bands` for the selected input block and conversion work;
 2. `pixels × decisions × 17 bytes` for compact results;
 3. native rasters and decompression peaks;
 4. any simultaneous workers; and
-5. scratch capacity when `output_dir` retains artifacts.
+5. scratch capacity for temporary native maps, or larger retained artifacts
+   when `output_dir` is used.
 
 Leave headroom rather than choosing a block that barely fits.

@@ -270,21 +270,9 @@ tetracorder6.00single r1
 <cmds.start.t6.00a.single
 ```
 
-The historical local 5.27 tutorial then demonstrates this prompt sequence:
-
-| Prompt input | Meaning |
-|---|---|
-| `s` | enter the single-spectrum analysis loop |
-| `y 300` | read record 300 from the SPECPR file assigned to device letter `y` |
-| `0 0` | use no additional lower or upper data threshold |
-| `4` | request one-line screen output plus full diagnostic results |
-| blank line | acknowledge completion / supply no comment |
-| `e` | exit |
-
-Therefore `y 300` is only an interactive data locator. `y` is a SPECPR device
-assignment from the restart file and `300` is a record number; neither is a
-classifier tuning parameter. The Python wrapper replaces that record lookup
-with caller-supplied reflectance, wavelength, FWHM, and mask arrays.
+The Python API does not invoke this interactive executable or expose SPECPR
+device/record locators. Caller-supplied reflectance, wavelength, FWHM, and mask
+arrays are packed into the tested 6.00 cube workflow instead.
 
 ## What Python currently exposes
 
@@ -301,6 +289,7 @@ The public call deliberately exposes Python-level data and execution controls:
 | `output_dir` | retain the otherwise temporary native work tree |
 | `timeout` | maximum native process duration |
 | `backend` | advanced backend substitution |
+| `scratch_dir` | parent for deleted per-call native work |
 
 Temperature, pressure, geology, native thresholds, identifiers, quick-look
 images, and true interactive mode are not public keyword arguments today. If

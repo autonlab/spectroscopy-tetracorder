@@ -16,6 +16,10 @@ Every variable has shape `input_sample_shape + (decisions,)`.
 | `matched` | bool | authoritative convenience mask |
 | `decisions` | tuple | group/case metadata for the final axis |
 | `materials` | mapping | material ID to stable output name |
+| `dims` | tuple or None | sample dimensions plus `decision` |
+| `coords` | mapping | caller coordinate labels carried through |
+| `input_metadata` | mapping | caller metadata carried through |
+| `provenance` | mapping | runtime, SIF, and native packing identity |
 
 Use `matched` before interpreting the other arrays. Unmatched
 `material_id` cells are normalized to `-1`.
@@ -74,16 +78,18 @@ pixel can match materials in more than one group/case.
 
 `result.provenance` currently records:
 
-- resolved container path;
-- resolved runtime executable;
-- native line and sample packing;
-- number of input spectra; and
-- number of padded spectra.
+- resolved container and runtime paths;
+- SIF byte size and modification time;
+- selected embedded SIF labels, including version, build method, base digest,
+  and source/upstream commit when the image contains them;
+- native line and sample packing; and
+- input and padded spectrum counts.
 
 `result.profile` and `result.backend_version` record the selected sensor
-profile and Python backend version. For a reproducible scientific product,
-also record your input product, preprocessing, Git commit, SIF checksum, and
-expert-system/library provenance outside this object.
+profile and Python backend version. Size, time, and labels make accidental
+image changes visible without hashing hundreds of megabytes on every call. For
+an archival scientific product, also record a SIF checksum plus input,
+preprocessing, expert-system, and library provenance.
 
 ## Temporary versus retained artifacts
 
@@ -96,6 +102,14 @@ assert result.artifacts_path is None
 
 The wrapper writes its input, driver, logs, and native output maps in a
 `TemporaryDirectory`, decodes them, and removes the directory.
+
+Place ephemeral work under a chosen scratch root without retaining it:
+
+```python
+result = analyze(data, profile=profile, scratch_dir="/path/to/job-scratch")
+```
+
+`TETRACORDER_TMPDIR` provides the same default for all calls in a job.
 
 To retain everything:
 

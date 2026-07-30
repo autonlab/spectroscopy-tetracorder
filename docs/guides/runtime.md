@@ -22,9 +22,8 @@ The SIF embeds compiled programs, commands, and `sl1` libraries. Only the
 per-call work directory is mounted at `/work`; the source checkout is not
 required beside an installed Python package.
 
-For the exact cube-mode command, fixed settings, profile-derived values, and
-the distinction from tutorial inputs such as `y 300`, see
-[Native modes & parameters](../concepts/native-modes.md).
+For the exact cube-mode command, fixed settings, and profile-derived values,
+see [Native modes & parameters](../concepts/native-modes.md).
 
 ## Container discovery
 
@@ -65,10 +64,11 @@ uv run tetracorderpy setup --dry-run
 uv run tetracorderpy setup
 ```
 
-Setup reuses an existing image. If none exists, it selects a compatible source
-checkout or clones the recorded Git revision and calls
+Setup reuses an existing image. If none exists, it selects the installed or
+shared compatible source checkout; an explicit repository/revision is the
+fallback when no checkout is available. It then calls
 `container/build-tetracorder6.sh`. The build starts from the definition's base
-image and source tree, not another SIF.
+image and source tree, not another SIF, and labels the source commit.
 
 Useful controls:
 
@@ -93,6 +93,18 @@ analyze(data, profile=profile, version="6.00")
 
 is implemented. The concrete supported image is Tetracorder **6.00a5**.
 Tetracorder 5.x is not emulated or routed through the 6.00 backend.
+
+## Temporary scratch
+
+Use `scratch_dir=` to choose the parent of a per-call temporary work directory,
+or set `TETRACORDER_TMPDIR` for a whole job. The wrapper deletes the child
+directory after decoding:
+
+```python
+result = analyze(data, profile=profile, scratch_dir="/path/to/job-scratch")
+```
+
+`output_dir=` is different: it retains native files and must be new or empty.
 
 ## Failure behavior
 

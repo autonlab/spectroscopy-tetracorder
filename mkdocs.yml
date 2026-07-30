@@ -39,6 +39,10 @@ theme:
 
 plugins:
   - search
+  - mkdocs-jupyter:
+      execute: false
+      include_source: true
+      ignore_h1_titles: true
   - mkdocstrings:
       handlers:
         python:
@@ -93,6 +97,7 @@ nav:
   - Start:
       - Installation on PSC: getting-started/installation.md
       - First analysis: getting-started/quickstart.md
+      - Executed Python tutorial: tutorials/python-api-tutorial.ipynb
   - Learn:
       - Hyperspectral data: concepts/hyperspectral-data.md
       - Sampling & sensor profiles: concepts/sampling-and-profiles.md
@@ -114,4 +119,5 @@ nav:
       - ENVI adapter: reference/formats.md
       - Errors: reference/errors.md
   - Project:
+      - Upstream sync & deployment: development/upstream-sync.md
       - Testing & documentation: development/testing.md

@@ -68,9 +68,11 @@ When `data` is already `SpectralData`, do not repeat `wavelength`, `fwhm`,
 `mask`, `dims`, `coords`, or `metadata` in `analyze()`. This prevents two
 conflicting sources of truth.
 
-`dims`, `coords`, and `metadata` are lightweight labels retained by the
-input model. They are not currently copied into `AnalysisResult` or interpreted
-as xarray coordinates.
+Input dimension names are returned as `result.dims`, with the spectral name
+replaced by `"decision"`. Caller coordinates and metadata are available as
+read-only `result.coords` and `result.input_metadata`. They are carried
+through, not interpreted, indexed, or automatically converted into xarray
+coordinates.
 
 ## Masks and invalid values
 
@@ -104,14 +106,15 @@ chunk loop as described in [Large cubes & memory](large-cubes.md).
 
 ## Profile inference
 
-If `profile` is omitted, the wrapper currently attempts exact automatic
-matching only for the known AVIRIS-1995 response:
+If `profile` is omitted, the wrapper compares exact packaged grids and accepts
+only one unique match. For example, the EMIT-C grid is unique:
 
 ```python
-profile = get_profile("aviris_1995")
+profile = get_profile("emit_c")
 data = SpectralData(values, profile.wavelength, fwhm=profile.fwhm)
 result = analyze(data)  # unique exact profile match
 ```
 
-For every other instrument, pass the profile explicitly. Ambiguity fails
-closed instead of guessing from the vector length.
+Pass `profile=` explicitly for band-count-only presets and for either AVIRIS
+preset. `aviris_1995` and `aviris_2024` have identical centers but different
+native restart configurations, so inference fails closed instead of guessing.

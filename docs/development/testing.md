@@ -8,12 +8,13 @@ the real Tetracorder image.
 | Area | What it verifies |
 |---|---|
 | Data model | axis movement, unit conversion, masks, nonfinite values, invalid wavelength metadata, reflectance-only input |
-| Profiles | bundled preset discovery, exact AVIRIS arrays, automatic matching, wrong-band and unknown-profile errors |
-| ENVI | BIP round trip, scale/ignore ordering, native VICAR offset, deleted values, arbitrary tensor packing and restoration |
-| API | one interface over scalar/batch/cube/higher shapes, temporary cleanup, retained artifacts, overwrite protection |
+| Profiles | four exact response grids, unique/ambiguous inference, count-only labels, mismatch errors, explicit 5.27 rejection |
+| ENVI | BIP round trip, scale/ignore ordering, VICAR offset, deleted values, arbitrary layout restoration, bounded non-contiguous packing |
+| API | scalar/batch/cube/higher shapes, metadata carry-through, scratch cleanup, retained artifacts, overwrite protection |
 | Decoder | native material scales, winner collation, sparse output, stable empty decisions |
 | Runtime/setup | search paths, PSC discovery, helpful missing-image failure, reuse, dry-run, incomplete checkout, CLI routing |
-| Container integration | synthetic one-spectrum execution, the documented expected-match fixture, and a synthetic 2×3 cube through the real 6.00a5 SIF |
+| Notebook | every code cell executed, no saved errors, plots and real single/batch outputs retained |
+| Container integration | synthetic spectrum, locked quick-start matches, one 2×3 native batch, and corner equality against independent runs through the real 6.00a5 SIF |
 
 The decoder and API unit tests use controlled fakes where isolating Python
 logic is the goal. The integration tests are the end-to-end contract: they
@@ -24,8 +25,14 @@ artifacts.
 ## Run fast tests
 
 ```bash
-uv sync --group dev
+uv sync --group dev --group notebook
 uv run pytest
+```
+
+For a branch-aware coverage report:
+
+```bash
+uv run --group dev pytest --cov=tetracorderpy --cov-branch --cov-report=term-missing
 ```
 
 Container tests carry the `integration` marker and skip unless explicitly
@@ -49,8 +56,21 @@ uv run pytest -m integration
 The synthetic curves are created from smooth continua and Gaussian absorption
 features; one also adds a small sinusoidal ripple. Neither is copied from a
 reference library. One test locks the match table published in the quick start,
-while the others verify execution, schema, and native batch packing. None
+while the others verify execution, schema, native batch packing, and exact
+batch-versus-single equality for two corner pixels. None
 asserts geological correctness.
+
+## Re-execute the tutorial
+
+The notebook is committed with outputs from the real SIF:
+
+```bash
+uv sync --group notebook
+uv run --group notebook jupyter execute docs/tutorials/python-api-tutorial.ipynb --inplace --timeout=1200
+```
+
+The fast suite checks that every code cell has an execution count, no saved
+error, plots, and the expected single/batch summary.
 
 ## Build the website
 
@@ -66,8 +86,8 @@ uv run --group docs mkdocs serve
 ```
 
 No npm toolchain is required. MkDocs reads `mkdocs.yml` and Markdown under
-`docs/`; Material supplies the theme, and mkdocstrings renders signatures
-from the installed source package.
+`docs/`; Material supplies the theme, mkdocstrings renders signatures, and
+mkdocs-jupyter renders the saved notebook without rerunning Tetracorder.
 
 ## Build the SIF from source
 
@@ -75,7 +95,8 @@ from the installed source package.
 ./container/build-tetracorder6.sh
 ```
 
-The build script refuses to replace an existing image. Give a new explicit
+The build script refuses to replace an existing image and records the checkout
+commit (plus a dirty suffix when applicable) in the new SIF. Give a distinct
 destination when retaining multiple images:
 
 ```bash

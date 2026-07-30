@@ -66,14 +66,24 @@ True True True
 3
 ```
 
-The bundled `aviris_1995` profile has exact upstream center and FWHM arrays.
-Validation requires the same 224 channels, within `1e-6 µm`.
+Four profiles package exact native center and FWHM arrays:
 
-Other bundled dataset names can be discovered from the Tetracorder command
-tree. When this package has only their restart-file channel count, validation
-can check the number of bands but **not** prove the center wavelengths or
-FWHM. In that case, the caller is responsible for confirming the native
-dataset's sensor response.
+| Profile | Bands | Center range (µm) | Validation |
+|---|---:|---:|---|
+| `aviris_1995` | 224 | 0.37892981–2.49833569 | wavelength and FWHM |
+| `aviris_2024` | 224 | 0.37892981–2.49833569 | wavelength and FWHM |
+| `emit_c` | 285 | 0.3810055–2.4929238 | wavelength and FWHM |
+| `aviris5_2025` | 424 | 0.38170–2.49962 | wavelength and FWHM |
+
+Validation requires the same channels in the stored order, within `1e-6 µm`.
+The AVIRIS 1995 and 2024 grids are identical, but their native restart
+configurations differ; wavelength-only inference therefore refuses to choose
+between them.
+
+Other bundled dataset names come from the Tetracorder command tree. Where the
+package has only their restart-file channel count, validation can check the
+number of bands but **not** prove center wavelengths or FWHM. The caller must
+confirm the native dataset's sensor response.
 
 !!! warning "Do not sort a wavelength array by itself"
 
