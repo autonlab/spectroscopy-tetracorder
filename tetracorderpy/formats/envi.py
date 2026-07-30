@@ -3,17 +3,17 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any, Mapping
+from typing import Any
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from ..errors import SpectralDataError
 from ..models import SpectralData
-
 
 _ENVI_DTYPES = {
     1: np.dtype("u1"),
@@ -29,26 +29,47 @@ _ENVI_DTYPES = {
     15: np.dtype("u8"),
 }
 
+_ENVI_DATA_SUFFIXES = (".img", ".raw", ".dat", ".bil", ".bip", ".bsq")
+
 
 def _header_and_data_paths(path: str | Path) -> tuple[Path, Path]:
     supplied = Path(path)
     if supplied.suffix.lower() == ".hdr":
         header_path = supplied
-        data_path = Path(str(supplied)[:-4])
-        if (
-            data_path.suffix.lower() == ".gz"
-            and not data_path.is_file()
-            and data_path.with_suffix("").is_file()
-        ):
-            data_path = data_path.with_suffix("")
+        stem_path = Path(str(supplied)[:-4])
+        candidates = [stem_path]
+        if stem_path.suffix.lower() == ".gz":
+            candidates.append(stem_path.with_suffix(""))
+        candidates.extend(
+            Path(f"{stem_path}{suffix}") for suffix in _ENVI_DATA_SUFFIXES
+        )
+        existing = list(dict.fromkeys(p for p in candidates if p.is_file()))
+        if stem_path in existing:
+            data_path = stem_path
+        elif len(existing) == 1:
+            data_path = existing[0]
+        elif len(existing) > 1:
+            names = ", ".join(str(candidate) for candidate in existing)
+            raise SpectralDataError(
+                f"ENVI header {header_path} has multiple possible data files: "
+                f"{names}"
+            )
+        else:
+            data_path = stem_path
     else:
         data_path = supplied
         direct_header = Path(f"{supplied}.hdr")
+        sibling_header = supplied.with_suffix(".hdr")
         native_header = Path(f"{supplied}.gz.hdr")
-        header_path = (
-            native_header
-            if not direct_header.is_file() and native_header.is_file()
-            else direct_header
+        header_path = next(
+            (
+                candidate
+                for candidate in dict.fromkeys(
+                    (direct_header, sibling_header, native_header)
+                )
+                if candidate.is_file()
+            ),
+            direct_header,
         )
     return header_path, data_path
 

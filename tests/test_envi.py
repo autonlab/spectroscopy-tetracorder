@@ -92,6 +92,41 @@ byte order = 0
     assert values_from_header[0, 0, 0] == 173
 
 
+def test_reads_img_and_raw_with_shared_stem_headers(tmp_path: Path) -> None:
+    expected = np.arange(12, dtype="<i2").reshape(2, 3, 2)
+    cases = {
+        ".img": ("bsq", expected.transpose(2, 0, 1)),
+        ".raw": ("bil", expected.transpose(0, 2, 1)),
+    }
+
+    for suffix, (interleave, storage) in cases.items():
+        directory = tmp_path / suffix.removeprefix(".")
+        directory.mkdir()
+        data_path = directory / f"cube{suffix}"
+        header_path = directory / "cube.hdr"
+        data_path.write_bytes(storage.tobytes())
+        header_path.write_text(
+            f"""ENVI
+samples = 3
+lines = 2
+bands = 2
+header offset = 0
+data type = 2
+interleave = {interleave}
+byte order = 0
+""",
+            encoding="ascii",
+        )
+
+        from_data, data_header = read_envi_array(data_path)
+        from_header, sidecar_header = read_envi_array(header_path)
+
+        np.testing.assert_array_equal(from_data, expected)
+        np.testing.assert_array_equal(from_header, expected)
+        assert data_header.header_path == header_path
+        assert sidecar_header.data_path == data_path
+
+
 def test_packed_envi_preserves_cube_layout_and_deleted_values(
     tmp_path: Path,
     synthetic_spectrum: tuple[np.ndarray, np.ndarray, np.ndarray],
