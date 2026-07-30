@@ -103,6 +103,20 @@ older SIF. The script creates `container/tetracorder6_00a5.sif` and refuses
 to overwrite an existing image. See `container/README.md` for build details.
 At runtime, the wrapper searches for `apptainer` or `singularity` on `PATH`.
 
+## Documentation website
+
+The modern documentation site includes installation, hyperspectral concepts,
+sampling and sensor-profile constraints, AVIRIS and ENVI guides, large-cube
+memory guidance, results, runtime behavior, generated API reference, and test
+documentation. Build or preview it entirely through uv; Node/npm is not
+required:
+
+```bash
+uv sync --group docs
+uv run --group docs mkdocs serve
+uv run --group docs mkdocs build --strict
+```
+
 ## NumPy quick start
 
 This example constructs a smooth, minimally plausible reflectance curve. It

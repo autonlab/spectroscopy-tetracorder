@@ -3,6 +3,7 @@
 __pycache__/
 .pytest_cache/
 *.egg-info/
+site/
 
 # Tetracorder generated outputs
 cuprite95/*/results
