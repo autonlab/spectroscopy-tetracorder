@@ -73,14 +73,10 @@ jobs:
             exit 1
           fi
 
-          if [ "${#STATICRYPT_PASSWORD}" -lt 14 ]; then
-            echo "::error::STATICRYPT_PASSWORD must be at least 14 characters."
-            exit 1
-          fi
-
           npx --yes staticrypt@3.5.4 site/* -r -d site \
             --config .github/staticrypt/config.json \
             --template .github/staticrypt/password-template.html \
+            --short \
             --remember 14 \
             --template-title "Tetracorder documentation" \
             --template-instructions "Enter the shared passphrase to continue." \
