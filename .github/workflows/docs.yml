@@ -73,6 +73,11 @@ jobs:
             exit 1
           fi
 
+          if [ "${#STATICRYPT_PASSWORD}" -lt 14 ]; then
+            echo "::error::STATICRYPT_PASSWORD must be at least 14 characters."
+            exit 1
+          fi
+
           npx --yes staticrypt@3.5.4 site/* -r -d site \
             --config .github/staticrypt/config.json \
             --template .github/staticrypt/password-template.html \
@@ -85,6 +90,15 @@ jobs:
             --template-remember "Remember this device" \
             --template-toggle-show "Show" \
             --template-toggle-hide "Hide"
+
+          html_count=$(find site -type f -name '*.html' | wc -l)
+          encrypted_count=$(find site -type f -name '*.html' \
+            -exec grep -l 'staticryptInitiator' {} + | wc -l)
+
+          if [ "${html_count}" -eq 0 ] || [ "${encrypted_count}" -ne "${html_count}" ]; then
+            echo "::error::Expected ${html_count} encrypted HTML files, found ${encrypted_count}."
+            exit 1
+          fi
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
