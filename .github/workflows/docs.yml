@@ -9,6 +9,7 @@ on:
       - "mkdocs.yml"
       - "pyproject.toml"
       - "uv.lock"
+      - ".github/staticrypt/**"
       - ".github/workflows/docs.yml"
   pull_request:
     branches: [main]
@@ -18,6 +19,7 @@ on:
       - "mkdocs.yml"
       - "pyproject.toml"
       - "uv.lock"
+      - ".github/staticrypt/**"
       - ".github/workflows/docs.yml"
   workflow_dispatch:
 
@@ -39,6 +41,7 @@ jobs:
             mkdocs.yml
             pyproject.toml
             uv.lock
+            .github/staticrypt
           sparse-checkout-cone-mode: false
 
       - name: Install uv and Python
@@ -55,6 +58,33 @@ jobs:
 
       - name: Build MkDocs
         run: uv run --locked --no-sync mkdocs build --strict --site-dir site
+
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+
+      - name: Encrypt documentation
+        env:
+          STATICRYPT_PASSWORD: ${{ github.event_name == 'pull_request' && 'pull-request-validation-only' || secrets.STATICRYPT_PASSWORD }}
+        run: |
+          if [ -z "${STATICRYPT_PASSWORD}" ]; then
+            echo "::error::Repository secret STATICRYPT_PASSWORD is not configured."
+            exit 1
+          fi
+
+          npx --yes staticrypt@3.5.4 site/* -r -d site \
+            --config .github/staticrypt/config.json \
+            --template .github/staticrypt/password-template.html \
+            --remember 14 \
+            --template-title "Tetracorder documentation" \
+            --template-instructions "Enter the shared passphrase to continue." \
+            --template-placeholder "Shared passphrase" \
+            --template-button "Unlock documentation" \
+            --template-error "That passphrase did not work." \
+            --template-remember "Remember this device" \
+            --template-toggle-show "Show" \
+            --template-toggle-hide "Hide"
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
